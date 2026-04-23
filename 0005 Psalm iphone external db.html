@@ -450,6 +450,16 @@ function scrollStructureBlockToTop(structureIndex) {
     panel.scrollTo({ top: topOffset, behavior: 'smooth' });
 }
 
+function scrollPanel3HeaderToTop() {
+    const panel3Header = document.getElementById('panel3Header');
+    if (!panel3Header) return;
+    try {
+        panel3Header.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+    } catch {
+        panel3Header.scrollIntoView(true);
+    }
+}
+
 function generatePsalmMap() {
     psalmMap = {};
     for (let i = 1; i <= 150; i++) {
@@ -508,6 +518,7 @@ function showDetail(n, el) {
     // 結構標籤與經文
     renderStructureTags(n);
     displayScripture(n);
+    scrollPanel3HeaderToTop();
 }
 
 function filter(typeId) {
@@ -539,19 +550,20 @@ function moveToPsalm(newPsalm) {
 
 function selectRelativePsalm(delta) {
     if (!Number.isInteger(delta) || delta === 0) return;
-    const base = currentPsalm || 1;
-    const next = ((base - 1 + delta + 150) % 150) + 1;
-    const cells = document.querySelectorAll('.psalm-cell');
+    const cells = Array.from(document.querySelectorAll('.psalm-cell'));
+    const visible = cells.filter(cell => !cell.classList.contains('dimmed'));
+    const scope = visible.length ? visible : cells;
+    if (!scope.length) return;
+    const numbers = scope.map(cell => parseInt(cell.textContent)).filter(Number.isFinite);
+    if (!numbers.length) return;
+    const base = currentPsalm && numbers.includes(currentPsalm) ? currentPsalm : numbers[0];
+    const currentIdx = numbers.indexOf(base);
+    const nextIdx = (currentIdx + delta + numbers.length) % numbers.length;
+    const next = numbers[nextIdx];
     let targetCell = null;
     cells.forEach(cell => { if (parseInt(cell.textContent) === next) targetCell = cell; });
     if (!targetCell) return;
     showDetail(next, targetCell);
-    const panel3Header = document.getElementById('panel3Header');
-    try {
-        if (panel3Header) panel3Header.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-    } catch {
-        if (panel3Header) panel3Header.scrollIntoView(true);
-    }
 }
 
 function handleTab(e) {
