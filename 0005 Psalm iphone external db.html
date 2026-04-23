@@ -119,6 +119,10 @@
                         <h2 id="pTitleDisplay" class="text-xl font-black text-slate-800 tracking-tight"></h2>
                         <h4 class="text-[10px] font-black text-blue-700 uppercase whitespace-nowrap">📜 詩篇文體</h4>
                         <p id="pTypeLabel" class="text-sm font-bold whitespace-nowrap"></p>
+                        <div class="ml-auto flex items-center gap-1">
+                            <button id="prevPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">◀</button>
+                            <button id="nextPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">▶</button>
+                        </div>
                     </div>
 
                     <!-- 詩篇結構分析 -->
@@ -531,6 +535,22 @@ function moveToPsalm(newPsalm) {
     }
 }
 
+function selectRelativePsalm(delta) {
+    if (!Number.isInteger(delta) || delta === 0) return;
+    const base = currentPsalm || 1;
+    const next = ((base - 1 + delta + 150) % 150) + 1;
+    const cells = document.querySelectorAll('.psalm-cell');
+    let targetCell = null;
+    cells.forEach(cell => { if (parseInt(cell.textContent) === next) targetCell = cell; });
+    if (!targetCell) return;
+    showDetail(next, targetCell);
+    try {
+        targetCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    } catch {
+        targetCell.scrollIntoView(true);
+    }
+}
+
 function handleTab(e) {
     if (e.key !== 'Tab') return;
     e.preventDefault();
@@ -608,6 +628,8 @@ function init() {
     });
     
     document.getElementById('copyScriptureBtn').addEventListener('click', copyScriptureText);
+    document.getElementById('prevPsalmBtn').addEventListener('click', () => selectRelativePsalm(-1));
+    document.getElementById('nextPsalmBtn').addEventListener('click', () => selectRelativePsalm(1));
 }
 
 let hasInitialized = false;
