@@ -102,7 +102,7 @@
 
         <!-- Panel 3: 詩篇分析（擴充版 - 加入 JSON 資料） -->
         <div class="panel-card flex flex-col">
-            <div class="bg-gradient-to-r from-gray-50 to-white px-4 py-3 border-b flex justify-between items-center">
+            <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-4 py-3 border-b flex justify-between items-center">
                 <h3 class="font-bold text-gray-700 text-xs uppercase tracking-wide">📖 詩篇分析</h3>
                 <span class="bg-indigo-50 text-indigo-600 text-[9px] px-2 py-0.5 rounded-full">結構標籤｜經文高亮｜完整背景</span>
             </div>
@@ -546,10 +546,11 @@ function selectRelativePsalm(delta) {
     cells.forEach(cell => { if (parseInt(cell.textContent) === next) targetCell = cell; });
     if (!targetCell) return;
     showDetail(next, targetCell);
+    const panel3Header = document.getElementById('panel3Header');
     try {
-        targetCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+        if (panel3Header) panel3Header.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
     } catch {
-        targetCell.scrollIntoView(true);
+        if (panel3Header) panel3Header.scrollIntoView(true);
     }
 }
 
