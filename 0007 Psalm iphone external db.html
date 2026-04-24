@@ -618,7 +618,7 @@ function scrollPanel3HeaderToTop() {
 function generatePsalmMap() {
     psalmMap = {};
     for (let i = 1; i <= 150; i++) {
-        let typeStr = OFFLINE_DB[i]?.type || "哀歌 (Lament)";
+        let typeStr = (OFFLINE_DB[i] && OFFLINE_DB[i].type) ? OFFLINE_DB[i].type : "哀歌 (Lament)";
         psalmMap[i] = typeToCat[typeStr] || typeToCat[normalizeTypeLabel(typeStr)] || "lament";
     }
 }
@@ -762,7 +762,8 @@ async function copySelectedSegment() {
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', copyBtn); return; }
     const titleElem = document.getElementById('scriptureTitle');
     const selectedText = getSelectedStructureText();
-    const fullText = document.getElementById('scriptureText')?.innerText?.trim() || '';
+    const scriptureEl = document.getElementById('scriptureText');
+    const fullText = (scriptureEl && scriptureEl.innerText) ? scriptureEl.innerText.trim() : '';
     const content = selectedText || fullText;
     if (!content) { showCopyFeedback('❌ 沒有可複製段落', copyBtn); return; }
     const finalCopy = `${titleElem ? titleElem.innerText.trim() : ''}\n\n${content}`.trim();
