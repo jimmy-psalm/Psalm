@@ -55,7 +55,8 @@
                 padding-bottom: calc(10px + env(safe-area-inset-bottom));
             }
             .panel-group {
-                min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
+                height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
+                min-height: 0;
                 display: grid;
                 grid-template-columns: 1fr 1fr;
                 gap: 10px;
@@ -70,7 +71,7 @@
             .panel-group .matrix-scroll,
             .panel-group .scripture-scroll {
                 max-height: none;
-                height: calc(100% - 64px);
+                height: calc(100% - 52px);
             }
             .panel-group .panel-card.flex.flex-col,
             .panel-group .panel4.flex.flex-col {
@@ -93,10 +94,13 @@
                 height: calc(100% - 44px);
                 padding-right: 0;
             }
-            .panel-group-top .panel-card.p-4,
+            .panel-group-top .panel-card.p-3,
             .panel-group-bottom .panel-card,
             .panel-group-bottom .panel4 {
                 border-radius: 16px;
+            }
+            #scriptureText {
+                padding-bottom: 55vh;
             }
         }
         .copy-toast { transition: opacity 0.2s ease; }
@@ -526,7 +530,10 @@ function scrollStructureBlockToTop(structureIndex) {
     const panel = document.getElementById('scripturePanel');
     const target = document.querySelector(`#scriptureText .structured-block[data-structure-index="${structureIndex}"]`);
     if (!panel || !target) return;
-    const topOffset = Math.max(0, target.offsetTop - panel.offsetTop - 2);
+    const panelRect = panel.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const delta = targetRect.top - panelRect.top;
+    const topOffset = Math.max(0, panel.scrollTop + delta);
     panel.scrollTo({ top: topOffset, behavior: 'smooth' });
 }
 
