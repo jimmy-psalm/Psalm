@@ -92,7 +92,7 @@
                 border-radius: 7px;
             }
         }
-        @media (min-width: 768px) and (max-width: 1199px) {
+        @media (min-width: 768px) and (max-width: 1199px) and (pointer: fine) {
             html, body {
                 height: 100%;
                 overflow: hidden;
@@ -141,6 +141,7 @@
                 overflow-y: auto;
             }
             .panel-group {
+                height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
                 height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
                 min-height: 0;
                 display: grid;
