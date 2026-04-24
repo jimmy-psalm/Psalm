@@ -45,6 +45,8 @@
             .panel-group { display: grid; gap: 16px; }
             .panel-group-top { grid-template-columns: 1fr 1.4fr; }
             .panel-group-bottom { grid-template-columns: 1fr 1fr; }
+            .panel-group-bottom > :first-child { order: 2; }
+            .panel-group-bottom > :last-child { order: 1; }
             .scripture-scroll { max-height: 320px; }
             .psalm-cell { font-size: 0.8rem; }
         }
