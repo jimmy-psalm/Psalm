@@ -43,12 +43,54 @@
         button, .psalm-cell, .legend-item { touch-action: manipulation; }
         @media (min-width: 768px) {
             .panel-group { display: grid; gap: 16px; }
-            .panel-group-top { grid-template-columns: 1fr 1.4fr; }
+            .panel-group-top { grid-template-columns: 0.72fr 1.68fr; }
             .panel-group-bottom { grid-template-columns: 1fr 1fr; }
             .panel-group-bottom > :first-child { order: 2; }
             .panel-group-bottom > :last-child { order: 1; }
             .scripture-scroll { max-height: 320px; }
-            .psalm-cell { font-size: 0.8rem; }
+            .panel-group-top .matrix-scroll {
+                max-height: none;
+                overflow-y: visible;
+                padding-right: 0;
+            }
+            .panel-group-top .psalm-grid-15 {
+                gap: 2px;
+            }
+            .psalm-cell { font-size: 0.66rem; border-radius: 8px; }
+        }
+        @media (min-width: 1200px) and (pointer: fine) {
+            .main-container {
+                height: 100vh;
+                min-height: 100vh;
+                overflow: hidden;
+                gap: 12px;
+            }
+            .panel-group {
+                height: calc((100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 36px) / 2);
+                min-height: 0;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+            .panel-group-top,
+            .panel-group-bottom {
+                grid-template-columns: 1fr 1fr;
+            }
+            .panel-group .panel-card,
+            .panel-group .panel4 {
+                height: 100%;
+                min-height: 0;
+            }
+            .panel-group-top .matrix-scroll,
+            .panel-group .scripture-scroll {
+                height: calc(100% - 46px);
+                max-height: none;
+                overflow-y: auto;
+            }
+            .panel-group-top .psalm-cell {
+                font-size: 0.6rem;
+                border-radius: 7px;
+            }
         }
         @media (orientation: landscape) and (max-width: 1024px) and (pointer: coarse) {
             .main-container {
@@ -619,6 +661,10 @@ function setActiveStructureTag(structureIndex) {
     if (activeTag) activeTag.classList.add('active');
 }
 
+function shouldAutoScrollMatrix() {
+    return isMobileView();
+}
+
 function scrollStructureBlockToTop(structureIndex) {
     if (!Number.isInteger(structureIndex) || structureIndex < 0) return;
     const panel = document.getElementById('scripturePanel');
@@ -700,8 +746,6 @@ function showDetail(n, el) {
     if (isMobileLandscapeView()) {
         const bottomGroup = document.getElementById('panelGroupBottom');
         if (bottomGroup) bottomGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else {
-        scrollPanel3HeaderToTop();
     }
 }
 
@@ -723,11 +767,13 @@ function moveToPsalm(newPsalm) {
     if (targetCell) {
         targetCell.click();
         targetCell.classList.add('active');
-        try {
-            targetCell.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-        } catch {
-            // Fallback for older iOS Safari that does not support smooth options object
-            targetCell.scrollIntoView(true);
+        if (shouldAutoScrollMatrix()) {
+            try {
+                targetCell.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+            } catch {
+                // Fallback for older iOS Safari that does not support smooth options object
+                targetCell.scrollIntoView(true);
+            }
         }
     }
 }
