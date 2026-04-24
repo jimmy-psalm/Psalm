@@ -24,12 +24,12 @@
         }
         .panel-group { display: flex; flex-direction: column; gap: 12px; }
         .panel-card { background: white; border-radius: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.05); overflow: hidden; }
-        .psalm-grid-15 { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 6px; }
+        .psalm-grid-15 { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 4px; }
         .psalm-cell { transition: all 0.1s ease; cursor: pointer; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.7rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 1px 2px rgba(0,0,0,0.05); background: #e2e8f0; color: #1e293b; }
         .psalm-cell:active { transform: scale(0.96); }
         .psalm-cell.dimmed { opacity: 0.3; filter: grayscale(0.6); }
         .psalm-cell.active { outline: 3px solid #1e293b; outline-offset: 2px; transform: scale(1.02); background: white; }
-        .matrix-scroll { max-height: 380px; overflow-y: auto; padding: 6px 4px 6px 0; scroll-behavior: smooth; }
+        .matrix-scroll { max-height: 380px; overflow-y: auto; padding: 2px 2px 2px 0; scroll-behavior: smooth; }
         .matrix-scroll::-webkit-scrollbar { width: 4px; }
         .matrix-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 20px; }
         .scripture-scroll { max-height: 280px; overflow-y: auto; padding: 0 4px 0 0; }
@@ -76,6 +76,28 @@
             .panel-group .panel4.flex.flex-col {
                 min-height: 0;
             }
+            .panel-group-top {
+                grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1.58fr);
+            }
+            .panel-group-top .psalm-grid-15 {
+                grid-template-columns: repeat(20, minmax(0, 1fr));
+                gap: 3px;
+            }
+            .panel-group-top .psalm-cell {
+                font-size: 0.56rem;
+                border-radius: 8px;
+            }
+            .panel-group-top .matrix-scroll {
+                overflow-y: auto;
+                max-height: none;
+                height: calc(100% - 44px);
+                padding-right: 0;
+            }
+            .panel-group-top .panel-card.p-4,
+            .panel-group-bottom .panel-card,
+            .panel-group-bottom .panel4 {
+                border-radius: 16px;
+            }
         }
         .copy-toast { transition: opacity 0.2s ease; }
         .struct-tag {
@@ -106,7 +128,7 @@
         .info-row { margin-bottom: 1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.75rem; }
         .info-label { font-size: 1rem; font-weight: 700; color: #64748b; margin-bottom: 0.25rem; }
         .info-value { font-size: 1rem; color: #1e293b; line-height: 1.5; }
-        .section-title { font-size: 1rem; font-weight: 700; }
+        .section-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
         .struct-tag.active { box-shadow: 0 0 0 2px rgba(30,41,59,0.55); }
     </style>
 </head>
@@ -115,8 +137,8 @@
 <div class="main-container">
     <div class="panel-group panel-group-top" id="panelGroupTop">
         <!-- Panel 1 -->
-        <div class="panel-card p-4">
-            <div class="flex items-center justify-between border-b-2 border-slate-300 pb-2 mb-2">
+        <div class="panel-card p-3">
+            <div class="flex items-center justify-between border-b-2 border-slate-300 pb-1 mb-1.5">
                 <h3 class="font-extrabold text-gray-800 text-base">詩篇類型統計</h3>
                 <span class="text-[9px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500">輕觸篩選</span>
             </div>
@@ -125,8 +147,8 @@
         </div>
 
         <!-- Panel 2 -->
-        <div class="panel-card p-4 flex flex-col">
-            <div class="flex justify-between items-center mb-2 pb-1 border-b-2 border-slate-300">
+        <div class="panel-card p-3 flex flex-col">
+            <div class="flex justify-between items-center mb-1.5 pb-1 border-b-2 border-slate-300">
                 <div><h3 class="font-extrabold text-gray-800 text-base">詩篇全景</h3></div>
                 <div class="text-[10px] text-gray-400">點擊/觸摸方格</div>
             </div>
@@ -137,7 +159,7 @@
     <div class="panel-group panel-group-bottom" id="panelGroupBottom">
         <!-- Panel 3 -->
         <div class="panel-card flex flex-col">
-            <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-4 py-3 border-b-2 border-slate-300 flex justify-between items-center">
+            <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center">
                 <h3 class="font-bold text-gray-700 text-base tracking-wide">詩篇分析</h3>
                 <span class="bg-indigo-50 text-indigo-600 text-[9px] px-2 py-0.5 rounded-full">點擊結構標籤以顯示經文</span>
             </div>
@@ -212,8 +234,8 @@
 
         <!-- Panel 4 -->
         <div class="panel4 bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-        <div class="bg-gray-50/80 px-4 py-2.5 border-b-2 border-slate-300 flex justify-between items-center flex-shrink-0">
-            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文全文</span><span class="bg-gray-200 text-gray-600 text-[9px] px-2 py-0.5 rounded-full">結構分段・彩色邊框</span></div>
+        <div class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center flex-shrink-0">
+            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文全文</span></div>
             <div class="flex items-center gap-2">
                 <button id="copySegmentBtn" class="bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95">複製這段落經文</button>
                 <button id="copyScriptureBtn" class="bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>複製全篇經文</button>
@@ -504,7 +526,7 @@ function scrollStructureBlockToTop(structureIndex) {
     const panel = document.getElementById('scripturePanel');
     const target = document.querySelector(`#scriptureText .structured-block[data-structure-index="${structureIndex}"]`);
     if (!panel || !target) return;
-    const topOffset = target.offsetTop - panel.offsetTop;
+    const topOffset = Math.max(0, target.offsetTop - panel.offsetTop - 2);
     panel.scrollTo({ top: topOffset, behavior: 'smooth' });
 }
 
@@ -574,10 +596,11 @@ function showDetail(n, el) {
     // 結構標籤與經文
     renderStructureTags(n);
     displayScripture(n);
-    scrollPanel3HeaderToTop();
     if (isMobileLandscapeView()) {
         const bottomGroup = document.getElementById('panelGroupBottom');
         if (bottomGroup) bottomGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        scrollPanel3HeaderToTop();
     }
 }
 
