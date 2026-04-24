@@ -39,6 +39,7 @@
         .panel4 { flex-shrink: 0; margin-top: 4px; }
         .legend-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; border-bottom: 1px solid #f1f5f9; cursor: pointer; border-radius: 14px; transition: background 0.1s; }
         .legend-item:active { background: #f8fafc; }
+        .legend-grid-2 { display: grid; grid-template-columns: 1fr; gap: 6px; }
         button, .psalm-cell, .legend-item { touch-action: manipulation; }
         @media (min-width: 768px) {
             .panel-group { display: grid; gap: 16px; }
@@ -53,6 +54,7 @@
                 gap: 0;
                 padding-top: calc(10px + env(safe-area-inset-top));
                 padding-bottom: calc(10px + env(safe-area-inset-bottom));
+                overflow-y: auto;
             }
             .panel-group {
                 height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 20px);
@@ -62,7 +64,7 @@
                 gap: 10px;
                 align-content: stretch;
                 scroll-snap-align: start;
-                margin-bottom: 10px;
+                margin-bottom: 0;
             }
             .panel-group .panel-card,
             .panel-group .panel4 {
@@ -78,7 +80,7 @@
                 min-height: 0;
             }
             .panel-group-top {
-                grid-template-columns: minmax(110px, 0.42fr) minmax(0, 1.58fr);
+                grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1.2fr);
             }
             .panel-group-top .psalm-grid-15 {
                 grid-template-columns: repeat(20, minmax(0, 1fr));
@@ -98,6 +100,16 @@
             .panel-group-bottom .panel-card,
             .panel-group-bottom .panel4 {
                 border-radius: 16px;
+            }
+            .panel-group-top #legend.legend-grid-2 {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 6px;
+                max-height: none;
+                overflow-y: auto;
+            }
+            .panel-group-top #legend.legend-grid-2 .legend-item {
+                min-height: 34px;
+                margin: 0;
             }
             #scriptureText {
                 padding-bottom: 55vh;
@@ -323,6 +335,13 @@ function isMobileLandscapeView() {
     return window.matchMedia('(orientation: landscape)').matches &&
         window.matchMedia('(max-width: 1024px)').matches &&
         window.matchMedia('(pointer: coarse)').matches;
+}
+
+function syncLandscapeLegendLayout() {
+    const legend = document.getElementById('legend');
+    if (!legend) return;
+    if (isMobileLandscapeView()) legend.classList.add('legend-grid-2');
+    else legend.classList.remove('legend-grid-2');
 }
 
 // 輔助函數：安全取得 JSON 資料
@@ -747,6 +766,7 @@ function init() {
         item.onclick = () => filter(id); 
         legendDiv.appendChild(item); 
     });
+    syncLandscapeLegendLayout();
     
     document.getElementById('resetBtn').onclick = () => { 
         document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('dimmed')); 
@@ -769,6 +789,7 @@ function init() {
     document.getElementById('copySegmentBtn').addEventListener('click', copySelectedSegment);
     document.getElementById('prevPsalmBtn').addEventListener('click', () => selectRelativePsalm(-1));
     document.getElementById('nextPsalmBtn').addEventListener('click', () => selectRelativePsalm(1));
+    window.addEventListener('resize', syncLandscapeLegendLayout);
 }
 
 let hasInitialized = false;
