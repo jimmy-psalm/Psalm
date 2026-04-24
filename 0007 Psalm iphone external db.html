@@ -154,6 +154,7 @@
         .info-value { font-size: 1rem; color: #1e293b; line-height: 1.5; }
         .section-title { font-size: 1rem; font-weight: 700; line-height: 1.2; }
         .struct-tag.active { box-shadow: 0 0 0 2px rgba(30,41,59,0.55); }
+        .panel-switch-header { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -162,7 +163,7 @@
     <div class="panel-group panel-group-top" id="panelGroupTop">
         <!-- Panel 1 -->
         <div class="panel-card p-3">
-            <div class="flex items-center justify-between border-b-2 border-slate-300 pb-1 mb-1.5">
+            <div id="panel1Header" class="panel-switch-header flex items-center justify-between border-b-2 border-slate-300 pb-1 mb-1.5">
                 <h3 class="font-extrabold text-gray-800 text-base">詩篇類型統計</h3>
                 <span class="text-[9px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500">輕觸篩選</span>
             </div>
@@ -172,7 +173,7 @@
 
         <!-- Panel 2 -->
         <div class="panel-card p-3 flex flex-col">
-            <div class="flex justify-between items-center mb-1.5 pb-1 border-b-2 border-slate-300">
+            <div id="panel2Header" class="panel-switch-header flex justify-between items-center mb-1.5 pb-1 border-b-2 border-slate-300">
                 <div><h3 class="font-extrabold text-gray-800 text-base">詩篇全景</h3></div>
                 <div class="text-[10px] text-gray-400">點擊/觸摸方格</div>
             </div>
@@ -183,7 +184,7 @@
     <div class="panel-group panel-group-bottom" id="panelGroupBottom">
         <!-- Panel 3 -->
         <div class="panel-card flex flex-col">
-            <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center">
+            <div id="panel3Header" class="panel-switch-header bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center">
                 <h3 class="font-bold text-gray-700 text-base tracking-wide">詩篇分析</h3>
                 <span class="bg-indigo-50 text-indigo-600 text-[9px] px-2 py-0.5 rounded-full">點擊結構標籤以顯示經文</span>
             </div>
@@ -258,7 +259,7 @@
 
         <!-- Panel 4 -->
         <div class="panel4 bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-        <div class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center flex-shrink-0">
+        <div id="panel4Header" class="panel-switch-header bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center flex-shrink-0">
             <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文全文</span></div>
             <div class="flex items-center gap-2">
                 <button id="copySegmentBtn" class="bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95">複製這段落經文</button>
@@ -345,11 +346,34 @@ function isMobileLandscapeView() {
         window.matchMedia('(pointer: coarse)').matches;
 }
 
+function isMobileView() {
+    return window.matchMedia('(max-width: 1024px)').matches &&
+        window.matchMedia('(pointer: coarse)').matches;
+}
+
 function syncLandscapeLegendLayout() {
     const legend = document.getElementById('legend');
     if (!legend) return;
     if (isMobileLandscapeView()) legend.classList.add('legend-grid-2');
     else legend.classList.remove('legend-grid-2');
+}
+
+function switchPanelGroup(targetGroupId) {
+    if (!isMobileView()) return;
+    const target = document.getElementById(targetGroupId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function bindPanelHeaderSwitch() {
+    const panel1Header = document.getElementById('panel1Header');
+    const panel2Header = document.getElementById('panel2Header');
+    const panel3Header = document.getElementById('panel3Header');
+    const panel4Header = document.getElementById('panel4Header');
+    if (panel1Header) panel1Header.addEventListener('click', () => switchPanelGroup('panelGroupBottom'));
+    if (panel2Header) panel2Header.addEventListener('click', () => switchPanelGroup('panelGroupBottom'));
+    if (panel3Header) panel3Header.addEventListener('click', () => switchPanelGroup('panelGroupTop'));
+    if (panel4Header) panel4Header.addEventListener('click', () => switchPanelGroup('panelGroupTop'));
 }
 
 // 輔助函數：安全取得 JSON 資料
@@ -797,6 +821,7 @@ function init() {
     document.getElementById('copySegmentBtn').addEventListener('click', copySelectedSegment);
     document.getElementById('prevPsalmBtn').addEventListener('click', () => selectRelativePsalm(-1));
     document.getElementById('nextPsalmBtn').addEventListener('click', () => selectRelativePsalm(1));
+    bindPanelHeaderSwitch();
     window.addEventListener('resize', syncLandscapeLegendLayout);
 }
 
