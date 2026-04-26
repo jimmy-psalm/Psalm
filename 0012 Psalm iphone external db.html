@@ -226,14 +226,22 @@
         }
         .copy-btn.speaking-once {
             background: #dbeafe !important;
-            color: #1d4ed8 !important;
             border-color: #93c5fd !important;
         }
         .copy-btn.speaking-loop {
             background: #dcfce7 !important;
-            color: #166534 !important;
             border-color: #86efac !important;
         }
+        .speak-icon {
+            font-size: 12px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tri-yellow { color: #facc15; }
+        .tri-red { color: #ef4444; }
+        .square-black { color: #111827; font-size: 11px; }
         .arrow-btn {
             min-width: 20px;
             height: 20px;
@@ -382,9 +390,9 @@
                 <button id="rateUpBtn" class="copy-btn arrow-btn arrow-rate shadow-sm transition-all active:scale-95" aria-label="提高朗讀速度">▲</button>
                 <button id="pitchDownBtn" class="copy-btn arrow-btn arrow-pitch shadow-sm transition-all active:scale-95" aria-label="降低朗讀音調">▼</button>
                 <button id="pitchUpBtn" class="copy-btn arrow-btn arrow-pitch shadow-sm transition-all active:scale-95" aria-label="提高朗讀音調">▲</button>
-                <button id="copySegmentBtn" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95">朗讀段落</button>
-                <button id="copyScriptureBtn" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95">朗讀全篇</button>
-                <button id="stopSpeakBtn" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95">停止</button>
+                <button id="copySegmentBtn" aria-label="朗讀段落" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon tri-yellow">▶</span></button>
+                <button id="copyScriptureBtn" aria-label="朗讀全篇" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon tri-red">▶</span></button>
+                <button id="stopSpeakBtn" aria-label="停止朗讀" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon square-black">■</span></button>
             </div>
         </div>
         <div id="scripturePanel" class="flex-1 p-4 scripture-scroll">
@@ -430,6 +438,7 @@ let speechRepeatEnabled = false;
 let speechRate = 0.95;
 let speechPitch = 1.0;
 let activeSpeechBtn = null;
+let speechSessionId = 0;
 
 const categories = {
     lament:       { name: '哀歌',          hex: '#A5C9FF', count: 0 },
@@ -927,6 +936,30 @@ function getWholePsalmSpeechText() {
     return cleanVerseTextForSpeech(scriptureEl ? scriptureEl.textContent : '');
 }
 
+function getStructuredSpeechChunks() {
+    const blocks = document.querySelectorAll('#scriptureText .structured-block');
+    if (!blocks.length) return [];
+    const chunks = [];
+    blocks.forEach((block, idx) => {
+        const verseNodes = block.querySelectorAll('.verse-line');
+        if (!verseNodes.length) {
+            const fallback = cleanVerseTextForSpeech(block.textContent);
+            if (fallback) chunks.push({ index: idx, text: fallback });
+            return;
+        }
+        const lines = [];
+        verseNodes.forEach(node => {
+            const clone = node.cloneNode(true);
+            clone.querySelectorAll('.verse-number').forEach(num => num.remove());
+            const t = clone.textContent.trim();
+            if (t) lines.push(t);
+        });
+        const text = lines.join('。');
+        if (text) chunks.push({ index: idx, text });
+    });
+    return chunks;
+}
+
 function isIOSDevice() {
     const ua = navigator.userAgent || '';
     return /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -969,6 +1002,7 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
     if (!('speechSynthesis' in window) || typeof window.SpeechSynthesisUtterance !== 'function') return;
     applySpeakingButtonState(btn, repeat);
     speechRepeatEnabled = repeat;
+    const mySession = ++speechSessionId;
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(content);
     utter.lang = 'zh-HK';
@@ -982,6 +1016,7 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
         clearSpeakingButtonState();
     };
     utter.onend = () => {
+        if (mySession !== speechSessionId) return;
         if (speechRepeatEnabled && repeat) {
             setTimeout(() => speakCantonese(content, btn, successMsg, true), 200);
             return;
@@ -989,6 +1024,48 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
         clearSpeakingButtonState();
     };
     window.speechSynthesis.speak(utter);
+}
+
+function speakSequentialChunks(chunks, btn, repeatCycle = false) {
+    if (!chunks.length) return;
+    if (!('speechSynthesis' in window) || typeof window.SpeechSynthesisUtterance !== 'function') return;
+    applySpeakingButtonState(btn, repeatCycle);
+    speechRepeatEnabled = repeatCycle;
+    const mySession = ++speechSessionId;
+    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = pickBestChineseVoice(voices);
+
+    const speakAt = (idx) => {
+        if (mySession !== speechSessionId) return;
+        const item = chunks[idx];
+        if (!item) {
+            if (speechRepeatEnabled && repeatCycle) {
+                speakAt(0);
+            } else {
+                clearSpeakingButtonState();
+            }
+            return;
+        }
+        if (Number.isInteger(item.index)) scrollStructureBlockToTop(item.index);
+        const utter = new SpeechSynthesisUtterance(item.text);
+        utter.lang = 'zh-HK';
+        utter.rate = speechRate;
+        utter.pitch = speechPitch;
+        if (preferred) utter.voice = preferred;
+        utter.onerror = () => {
+            if (mySession !== speechSessionId) return;
+            speechRepeatEnabled = false;
+            clearSpeakingButtonState();
+        };
+        utter.onend = () => {
+            if (mySession !== speechSessionId) return;
+            speakAt(idx + 1);
+        };
+        window.speechSynthesis.speak(utter);
+    };
+
+    speakAt(0);
 }
 
 function adjustSpeechSetting(type, delta, btn) {
@@ -1020,6 +1097,13 @@ function showSpeechSettingHint(msg, color) {
 function readWholePsalm() {
     const btn = document.getElementById('copyScriptureBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    const chunks = getStructuredSpeechChunks();
+    if (chunks.length) {
+        speakSequentialChunks(chunks, btn, false);
+        return;
+    }
+    const panel = document.getElementById('scripturePanel');
+    if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
     const content = getWholePsalmSpeechText();
     speakCantonese(content, btn, '🔊 朗讀全篇中');
 }
@@ -1027,6 +1111,7 @@ function readWholePsalm() {
 function readSelectedSegment() {
     const btn = document.getElementById('copySegmentBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    if (Number.isInteger(selectedStructureIndex)) scrollStructureBlockToTop(selectedStructureIndex);
     const content = getSelectedStructureSpeechText() || getWholePsalmSpeechText();
     speakCantonese(content, btn, '🔊 朗讀段落中');
 }
@@ -1034,6 +1119,13 @@ function readSelectedSegment() {
 function readWholePsalmRepeat() {
     const btn = document.getElementById('copyScriptureBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    const chunks = getStructuredSpeechChunks();
+    if (chunks.length) {
+        speakSequentialChunks(chunks, btn, true);
+        return;
+    }
+    const panel = document.getElementById('scripturePanel');
+    if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
     const content = getWholePsalmSpeechText();
     speakCantonese(content, btn, '🔁 循環朗讀全篇中', true);
 }
@@ -1041,6 +1133,7 @@ function readWholePsalmRepeat() {
 function readSelectedSegmentRepeat() {
     const btn = document.getElementById('copySegmentBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    if (Number.isInteger(selectedStructureIndex)) scrollStructureBlockToTop(selectedStructureIndex);
     const content = getSelectedStructureSpeechText() || getWholePsalmSpeechText();
     speakCantonese(content, btn, '🔁 循環朗讀段落中', true);
 }
@@ -1100,6 +1193,7 @@ function bindShortAndLongPressSpeak(button, onShortPress, onLongPress) {
 function stopSpeaking() {
     if (!('speechSynthesis' in window)) return;
     speechRepeatEnabled = false;
+    speechSessionId += 1;
     window.speechSynthesis.cancel();
     clearSpeakingButtonState();
 }
