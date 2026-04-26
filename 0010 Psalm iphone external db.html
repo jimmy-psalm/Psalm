@@ -348,17 +348,24 @@
 // ============================================================================
 // 📍 位置 1：經文資料（保持原有 FULL_TEXTS，此處省略以節省空間，請保留你的完整資料）
 // ============================================================================
+// 📍 位置 1：請將您的 psalm-text.json 完整內容貼到下方的 FULL_TEXTS 中
+// ============================================================================
 let FULL_TEXTS = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.FULL_TEXTS) || {};
+// ============================================================================
 
 // ============================================================================
 // 📍 位置 2：請將您的 OFFLINE_DB 完整內容貼到下方
 // ============================================================================
-let OFFLINE_DB = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.OFFLINE_DB) || {};
+
+        let OFFLINE_DB = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.OFFLINE_DB) || {};
+ // ============================================================================
 
 // ============================================================================
 // 📍 位置 3：請將您的詩篇結構分析 JSON 貼到下方
 // ============================================================================
+// ==================== 詩篇結構分析資料 ====================
 let PSALM_STRUCTURE = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.PSALM_STRUCTURE) || {};
+// ==================== 結構分析資料結束 ====================// ============================================================================
 let PSALMS_JSON_DATA = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.PSALMS_JSON_DATA) || {};
 
 // ============================================================================
@@ -367,9 +374,7 @@ let PSALMS_JSON_DATA = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.PSALMS_JS
 let psalmMap = {};
 let currentPsalm = null;
 let selectedStructureIndex = 0;
-
-// 🆕 朗讀鎖：防止長按重複觸發
-let isSpeaking = false;
+let speechRepeatEnabled = false;
 
 const categories = {
     lament:       { name: '哀歌',          hex: '#A5C9FF', count: 0 },
@@ -464,6 +469,7 @@ function bindPanelSwitchButtons() {
     if (up4) up4.addEventListener('click', () => switchPanelGroup('panelGroupTop'));
 }
 
+// 輔助函數：安全取得 JSON 資料
 function getJsonData(psalmNum, field) {
     if (PSALMS_JSON_DATA && PSALMS_JSON_DATA[psalmNum] && PSALMS_JSON_DATA[psalmNum][field]) {
         return PSALMS_JSON_DATA[psalmNum][field];
@@ -725,11 +731,13 @@ function calculateCounts() {
     }
 }
 
+// 🆕 修改後的 showDetail 函數：同時顯示 JSON 資料
 function showDetail(n, el) {
     currentPsalm = n;
     document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('active'));
     if (el) el.classList.add('active');
     
+    // 原有 OFFLINE_DB 資料
     const data = OFFLINE_DB[n] || { 
         type: "哀歌", 
         theme: "主題待補充", 
@@ -741,22 +749,26 @@ function showDetail(n, el) {
     const catKey = psalmMap[n];
     const cat = categories[catKey] || categories.lament;
     
+    // 顯示/隱藏面板
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('contentState').classList.remove('hidden');
     document.getElementById('topAccent').style.backgroundColor = cat.hex;
     document.getElementById('pTitleDisplay').textContent = `第 ${n} 篇`;
     
+    // 原有欄位
     document.getElementById('pTypeLabel').textContent = `(詩篇類型：${normalizeTypeLabel(data.type)})`;
     document.getElementById('pTheme').textContent = data.theme;
     document.getElementById('pContent').textContent = data.content;
     document.getElementById('pGolden').textContent = `「${data.golden}」`;
     document.getElementById('pRef').textContent = data.ref;
     
+    // 🆕 新增欄位：從 JSON 取得資料
     const authorText = getJsonData(n, '作者');
     const emotionText = getJsonData(n, '作者情緒');
     document.getElementById('pAuthor').textContent = `${authorText}｜${emotionText}`;
     document.getElementById('pBackground').textContent = getJsonData(n, '寫作背景');
     document.getElementById('pSituation').textContent = getJsonData(n, '適合的處境／情緒');
+    // 結構標籤與經文
     renderStructureTags(n);
     displayScripture(n);
     selectStructureByIndex(0);
@@ -790,6 +802,7 @@ function moveToPsalm(newPsalm) {
             try {
                 targetCell.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
             } catch {
+                // Fallback for older iOS Safari that does not support smooth options object
                 targetCell.scrollIntoView(true);
             }
         }
@@ -862,8 +875,35 @@ function getWholePsalmSpeechText() {
     return cleanVerseTextForSpeech(scriptureEl ? scriptureEl.textContent : '');
 }
 
-// ==================== 🆕 修改後的朗讀函數（加入防重複鎖） ====================
-function speakCantonese(text, btn, successMsg) {
+function isIOSDevice() {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function pickBestChineseVoice(voices) {
+    if (!voices || !voices.length) return null;
+    const iosPreferredPatterns = [
+        /siri.*zh-hk/i, /siri.*zh-tw/i, /siri.*zh-cn/i,
+        /ting-ting/i, /sin-ji/i, /mei-jia/i
+    ];
+    const cantonesePatterns = [/yue/i, /cantonese/i, /zh-hk/i];
+    const fallbackPatterns = [/zh-tw/i, /zh-cn/i, /zh/i];
+    const list = voices.map(v => ({ v, sig: `${v.lang} ${v.name}` }));
+    const findByPatterns = (patterns) => {
+        for (const p of patterns) {
+            const hit = list.find(item => p.test(item.sig));
+            if (hit) return hit.v;
+        }
+        return null;
+    };
+    if (isIOSDevice()) {
+        const iosVoice = findByPatterns(iosPreferredPatterns);
+        if (iosVoice) return iosVoice;
+    }
+    return findByPatterns(cantonesePatterns) || findByPatterns(fallbackPatterns);
+}
+
+function speakCantonese(text, btn, successMsg, repeat = false) {
     const content = (text || '').trim();
     if (!content) {
         showCopyFeedback('❌ 沒有可朗讀內容', btn);
@@ -873,47 +913,40 @@ function speakCantonese(text, btn, successMsg) {
         showCopyFeedback('❌ 裝置不支援朗讀', btn);
         return;
     }
-    // 如果正在朗讀，忽略新的請求（防止長按造成的循環）
-    if (isSpeaking) {
-        showCopyFeedback('⏸️ 正在朗讀中，請稍後', btn);
-        return;
-    }
-    
-    // 停止當前語音，並重置鎖狀態
+    speechRepeatEnabled = repeat;
     window.speechSynthesis.cancel();
-    isSpeaking = true;
-    
     const utter = new SpeechSynthesisUtterance(content);
     utter.lang = 'zh-HK';
     utter.rate = 0.95;
     utter.pitch = 1;
-    
-    // 選擇粵語語音（若有）
     const voices = window.speechSynthesis.getVoices();
-    const yueVoice = voices.find(v => /yue|cantonese|zh-hk/i.test(`${v.lang} ${v.name}`));
-    if (yueVoice) utter.voice = yueVoice;
-    
-    utter.onstart = () => {
-        showCopyFeedback(successMsg, btn);
+    const preferredVoice = pickBestChineseVoice(voices);
+    if (preferredVoice) utter.voice = preferredVoice;
+    utter.onstart = () => showCopyFeedback(successMsg, btn);
+    utter.onerror = () => {
+        speechRepeatEnabled = false;
+        showCopyFeedback('❌ 朗讀失敗', btn);
     };
     utter.onend = () => {
-        isSpeaking = false;
+        if (speechRepeatEnabled && repeat) {
+            setTimeout(() => speakCantonese(content, btn, successMsg, true), 180);
+        }
     };
-    utter.onerror = (err) => {
-        console.warn('朗讀錯誤', err);
-        showCopyFeedback('❌ 朗讀失敗', btn);
-        isSpeaking = false;
-    };
-    
     window.speechSynthesis.speak(utter);
 }
-// ========================================================================
 
 function readWholePsalm() {
     const btn = document.getElementById('copyScriptureBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
     const content = getWholePsalmSpeechText();
     speakCantonese(content, btn, '🔊 朗讀全篇中');
+}
+
+function readWholePsalmRepeat() {
+    const btn = document.getElementById('copyScriptureBtn');
+    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    const content = getWholePsalmSpeechText();
+    speakCantonese(content, btn, '🔁 循環朗讀全篇中', true);
 }
 
 function readSelectedSegment() {
@@ -923,14 +956,59 @@ function readSelectedSegment() {
     speakCantonese(content, btn, '🔊 朗讀段落中');
 }
 
+function readSelectedSegmentRepeat() {
+    const btn = document.getElementById('copySegmentBtn');
+    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    const content = getSelectedStructureSpeechText() || getWholePsalmSpeechText();
+    speakCantonese(content, btn, '🔁 循環朗讀段落中', true);
+}
+
+function bindShortAndLongPressSpeak(button, onShortPress, onLongPress) {
+    if (!button) return;
+    const LONG_PRESS_MS = 450;
+    let timer = null;
+    let longTriggered = false;
+    let suppressClick = false;
+    const clear = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+    };
+    const start = (e) => {
+        if (e && e.pointerType === 'mouse' && e.button !== 0) return;
+        clear();
+        longTriggered = false;
+        timer = setTimeout(() => {
+            longTriggered = true;
+            suppressClick = true;
+            onLongPress();
+        }, LONG_PRESS_MS);
+    };
+    const end = () => {
+        if (!timer && !longTriggered) return;
+        clear();
+        if (!longTriggered) onShortPress();
+    };
+    button.addEventListener('pointerdown', start);
+    button.addEventListener('pointerup', end);
+    button.addEventListener('pointercancel', clear);
+    button.addEventListener('pointerleave', clear);
+    button.addEventListener('click', (e) => {
+        if (suppressClick) {
+            suppressClick = false;
+            e.preventDefault();
+            return;
+        }
+    });
+}
+
 function stopSpeaking() {
     const btn = document.getElementById('stopSpeakBtn');
     if (!('speechSynthesis' in window)) {
         showCopyFeedback('❌ 裝置不支援朗讀', btn);
         return;
     }
+    speechRepeatEnabled = false;
     window.speechSynthesis.cancel();
-    isSpeaking = false;  // 重置鎖
     showCopyFeedback('⏹️ 已停止朗讀', btn);
 }
 
@@ -942,6 +1020,7 @@ function showCopyFeedback(msg, btn) {
 }
 
 function init() {
+    // 初始化預設資料
     for (let i = 1; i <= 150; i++) {
         if (!OFFLINE_DB[i]) OFFLINE_DB[i] = { type: "哀歌", theme: `詩篇第 ${i} 篇`, content: "請自行補充內容", golden: "耶和華是我的拯救", ref: `詩篇 ${i}:1` };
         if (!FULL_TEXTS[i]) FULL_TEXTS[i] = { title: `詩篇第 ${i} 篇`, text: `詩篇第 ${i} 篇的經文將在您加入完整資料後顯示。` };
@@ -949,6 +1028,7 @@ function init() {
     }
     generatePsalmMap(); calculateCounts();
     
+    // 建立詩篇矩陣
     const grid = document.getElementById('psalmGrid'); grid.innerHTML = '';
     for (let i = 1; i <= 150; i++) {
         const catKey = psalmMap[i]; const cat = categories[catKey] || categories.lament;
@@ -957,6 +1037,7 @@ function init() {
         grid.appendChild(cell);
     }
     
+    // 建立圖例
     const legendDiv = document.getElementById('legend'); legendDiv.innerHTML = '';
     Object.entries(categories).forEach(([id, c]) => { 
         const item = document.createElement('button'); item.type = 'button'; item.className = "legend-item"; item.setAttribute('aria-label', `篩選${c.name}`); 
@@ -986,8 +1067,8 @@ function init() {
         } 
     });
     
-    document.getElementById('copyScriptureBtn').addEventListener('click', readWholePsalm);
-    document.getElementById('copySegmentBtn').addEventListener('click', readSelectedSegment);
+    bindShortAndLongPressSpeak(document.getElementById('copyScriptureBtn'), readWholePsalm, readWholePsalmRepeat);
+    bindShortAndLongPressSpeak(document.getElementById('copySegmentBtn'), readSelectedSegment, readSelectedSegmentRepeat);
     document.getElementById('stopSpeakBtn').addEventListener('click', stopSpeaking);
     document.getElementById('prevPsalmBtn').addEventListener('click', () => selectRelativePsalm(-1));
     document.getElementById('nextPsalmBtn').addEventListener('click', () => selectRelativePsalm(1));
