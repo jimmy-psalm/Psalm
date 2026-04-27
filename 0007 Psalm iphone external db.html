@@ -26,6 +26,7 @@
         .panel-card { background: white; border-radius: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.05); overflow: hidden; }
         .psalm-grid-15 { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 4px; }
         .psalm-cell { transition: all 0.1s ease; cursor: pointer; aspect-ratio: 1 / 1; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.7rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 1px 2px rgba(0,0,0,0.05); background: #e2e8f0; color: #1e293b; }
+        .psalm-cell { appearance: none; -webkit-appearance: none; }
         .psalm-cell:active { transform: scale(0.96); }
         .psalm-cell.dimmed { opacity: 0.3; filter: grayscale(0.6); }
         .psalm-cell.active { outline: 3px solid #1e293b; outline-offset: 2px; transform: scale(1.02); background: white; }
@@ -38,6 +39,7 @@
         .verse-paragraph { margin-bottom: 0.75rem; }
         .panel4 { flex-shrink: 0; margin-top: 4px; }
         .legend-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; border-bottom: 1px solid #f1f5f9; cursor: pointer; border-radius: 14px; transition: background 0.1s; }
+        .legend-item { appearance: none; -webkit-appearance: none; width: 100%; text-align: left; background: transparent; }
         .legend-item:active { background: #f8fafc; }
         .legend-grid-2 { display: grid; grid-template-columns: 1fr; gap: 6px; }
         button, .psalm-cell, .legend-item { touch-action: manipulation; }
@@ -211,11 +213,73 @@
             align-items: center;
             justify-content: center;
         }
-        .panel4-actions { display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
-        .copy-btn { white-space: nowrap; flex-shrink: 0; }
+        .panel4-actions { display: flex; align-items: center; gap: 3px; justify-content: flex-end; flex-wrap: nowrap; }
+        .copy-btn {
+            white-space: nowrap;
+            flex-shrink: 0;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            font-size: 12.5px;
+            padding: 5px 7.5px;
+            line-height: 1.1;
+        }
+        .copy-btn.speaking-once {
+            background: #dbeafe !important;
+            border-color: #93c5fd !important;
+        }
+        .copy-btn.speaking-loop {
+            background: #dcfce7 !important;
+            border-color: #86efac !important;
+        }
+        .speak-icon {
+            font-size: 15px;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tri-yellow { color: #22c55e; }
+        .tri-red { color: #ef4444; }
+        .square-black { color: #111827; font-size: 13.75px; }
+        .arrow-btn {
+            min-width: 25px;
+            height: 25px;
+            padding: 0;
+            line-height: 1;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            font-size: 12.5px;
+            font-weight: 800;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .arrow-rate { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+        .arrow-pitch { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        #prevPsalmBtn, #nextPsalmBtn, #prevSectionBtn, #nextSectionBtn {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+        .speech-setting-hint {
+            font-size: 10px;
+            font-weight: 700;
+            opacity: 0;
+            transform: translateY(-2px);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+        .speech-setting-hint.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
         @media (max-width: 1100px) {
-            .panel4-actions { gap: 4px; }
-            .copy-btn { font-size: 10px; padding: 5px 8px; }
+            .panel4-actions { gap: 2px; }
+            .copy-btn { font-size: 11.25px; padding: 3.75px 6.25px; }
+            .arrow-btn { min-width: 22.5px; height: 22.5px; font-size: 11.25px; border-radius: 6px; }
         }
     </style>
 </head>
@@ -251,7 +315,10 @@
             <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center">
                 <h3 class="font-bold text-gray-700 text-base tracking-wide">詩篇分析</h3>
                 <button id="jumpUpBtn3" type="button" class="panel-jump-btn" aria-label="切換到上方面板">▲</button>
-                <span class="bg-indigo-50 text-indigo-600 text-[9px] px-2 py-0.5 rounded-full">點擊結構標籤以顯示經文</span>
+                <div class="flex items-center gap-1">
+                    <button id="prevPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">&lt; 上一篇</button>
+                    <button id="nextPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">下一篇 &gt;</button>
+                </div>
             </div>
             <div id="emptyState" class="flex-1 flex flex-col items-center justify-center p-3 text-center min-h-[90px]">
                 <p class="text-gray-400 text-sm font-medium">✨ 選擇詩篇篇章</p><p class="text-gray-300 text-xs mt-1">點擊方格查看詳情</p>
@@ -269,8 +336,8 @@
                         <div class="flex items-center justify-between gap-2">
                             <h4 class="section-title text-green-700">詩篇結構分析</h4>
                             <div class="flex items-center gap-1">
-                                <button id="prevPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">&lt; 上一篇</button>
-                                <button id="nextPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">下一篇 &gt;</button>
+                                <button id="prevSectionBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">&lt; 上一段</button>
+                                <button id="nextSectionBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">下一段 &gt;</button>
                             </div>
                         </div>
                         <div id="structureTagsContainer" class="mt-2 text-sm leading-relaxed"></div>
@@ -322,11 +389,16 @@
         <!-- Panel 4 -->
         <div class="panel4 bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
         <div id="panel4Header" class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex items-center gap-2 flex-shrink-0">
-            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文全文</span></div>
-            <button id="jumpUpBtn4" type="button" class="panel-jump-btn" aria-label="切換到上方面板">▲</button>
+            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文</span></div>
+            <span id="speechSettingHint" class="speech-setting-hint"></span>
             <div class="panel4-actions ml-auto">
-                <button id="copySegmentBtn" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95">段落複製</button>
-                <button id="copyScriptureBtn" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-3 py-1.5 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>全篇複製</button>
+                <button id="rateDownBtn" class="copy-btn arrow-btn arrow-rate shadow-sm transition-all active:scale-95" aria-label="降低朗讀速度">▼</button>
+                <button id="rateUpBtn" class="copy-btn arrow-btn arrow-rate shadow-sm transition-all active:scale-95" aria-label="提高朗讀速度">▲</button>
+                <button id="pitchDownBtn" class="copy-btn arrow-btn arrow-pitch shadow-sm transition-all active:scale-95" aria-label="降低朗讀音調">▼</button>
+                <button id="pitchUpBtn" class="copy-btn arrow-btn arrow-pitch shadow-sm transition-all active:scale-95" aria-label="提高朗讀音調">▲</button>
+                <button id="copySegmentBtn" aria-label="朗讀段落" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon tri-yellow">▶</span></button>
+                <button id="copyScriptureBtn" aria-label="朗讀全篇" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon tri-red">▶</span></button>
+                <button id="stopSpeakBtn" aria-label="停止朗讀" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon square-black">■</span></button>
             </div>
         </div>
         <div id="scripturePanel" class="flex-1 p-4 scripture-scroll">
@@ -368,6 +440,11 @@ let PSALMS_JSON_DATA = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.PSALMS_JS
 let psalmMap = {};
 let currentPsalm = null;
 let selectedStructureIndex = 0;
+let speechRepeatEnabled = false;
+let speechRate = 0.95;
+let speechPitch = 1.0;
+let activeSpeechBtn = null;
+let speechSessionId = 0;
 
 const categories = {
     lament:       { name: '哀歌',          hex: '#A5C9FF', count: 0 },
@@ -441,8 +518,7 @@ function syncPanelSwitchButtons() {
     const buttons = [
         document.getElementById('jumpDownBtn1'),
         document.getElementById('jumpDownBtn2'),
-        document.getElementById('jumpUpBtn3'),
-        document.getElementById('jumpUpBtn4')
+        document.getElementById('jumpUpBtn3')
     ];
     buttons.forEach(btn => {
         if (!btn) return;
@@ -455,11 +531,9 @@ function bindPanelSwitchButtons() {
     const down1 = document.getElementById('jumpDownBtn1');
     const down2 = document.getElementById('jumpDownBtn2');
     const up3 = document.getElementById('jumpUpBtn3');
-    const up4 = document.getElementById('jumpUpBtn4');
     if (down1) down1.addEventListener('click', () => switchPanelGroup('panelGroupBottom'));
     if (down2) down2.addEventListener('click', () => switchPanelGroup('panelGroupBottom'));
     if (up3) up3.addEventListener('click', () => switchPanelGroup('panelGroupTop'));
-    if (up4) up4.addEventListener('click', () => switchPanelGroup('panelGroupTop'));
 }
 
 // 輔助函數：安全取得 JSON 資料
@@ -666,6 +740,26 @@ function shouldAutoScrollMatrix() {
     return isMobileView();
 }
 
+function getStructureCount() {
+    return document.querySelectorAll('.js-struct-tag').length;
+}
+
+function selectStructureByIndex(idx) {
+    const total = getStructureCount();
+    if (!total) return;
+    const normalized = ((idx % total) + total) % total;
+    selectedStructureIndex = normalized;
+    setActiveStructureTag(normalized);
+    scrollStructureBlockToTop(normalized);
+}
+
+function selectRelativeStructure(delta) {
+    const total = getStructureCount();
+    if (!total) return;
+    const base = Number.isInteger(selectedStructureIndex) ? selectedStructureIndex : 0;
+    selectStructureByIndex(base + delta);
+}
+
 function scrollStructureBlockToTop(structureIndex) {
     if (!Number.isInteger(structureIndex) || structureIndex < 0) return;
     const panel = document.getElementById('scripturePanel');
@@ -744,6 +838,7 @@ function showDetail(n, el) {
     // 結構標籤與經文
     renderStructureTags(n);
     displayScripture(n);
+    selectStructureByIndex(0);
     if (isMobileLandscapeView()) {
         const bottomGroup = document.getElementById('panelGroupBottom');
         if (bottomGroup) bottomGroup.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -812,48 +907,347 @@ function handleTab(e) {
     moveToPsalm(parseInt(visible[nextIdx].textContent));
 }
 
-async function copyScriptureText() {
-    const contentDiv = document.getElementById('scriptureContent');
-    const copyBtn = document.getElementById('copyScriptureBtn');
-    if (contentDiv.classList.contains('hidden') || !currentPsalm) { showCopyFeedback('⚠️ 沒有可複製的經文', copyBtn); return; }
-    const titleElem = document.getElementById('scriptureTitle');
-    const textElem = document.getElementById('scriptureText');
-    if (!titleElem || !textElem || !textElem.innerText.trim()) { showCopyFeedback('❌ 經文內容為空', copyBtn); return; }
-    const finalCopy = `${titleElem.innerText.trim()}\n\n${textElem.innerText.trim()}`;
-    try { await navigator.clipboard.writeText(finalCopy); showCopyFeedback('✅ 已複製全篇', copyBtn); }
-    catch { const ta = document.createElement('textarea'); ta.value = finalCopy; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showCopyFeedback('📋 已複製 (備份)', copyBtn); }
+function cleanVerseTextForSpeech(rawText) {
+    if (!rawText) return '';
+    const lines = String(rawText).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const cleaned = lines.map(line => line.replace(/^\d+[\.\s、：:]*/u, '').trim()).filter(Boolean);
+    return cleaned.join('。');
 }
 
-function getSelectedStructureText() {
+function getSelectedStructureSpeechText() {
     const blocks = document.querySelectorAll('#scriptureText .structured-block');
     if (!blocks.length) return '';
     const idx = Number.isInteger(selectedStructureIndex) ? selectedStructureIndex : 0;
     const target = blocks[idx] || blocks[0];
-    return target.innerText.trim();
+    const verseNodes = target.querySelectorAll('.verse-line');
+    if (verseNodes.length) {
+        const lines = [];
+        verseNodes.forEach(node => {
+            const clone = node.cloneNode(true);
+            clone.querySelectorAll('.verse-number').forEach(num => num.remove());
+            const t = clone.textContent.trim();
+            if (t) lines.push(t);
+        });
+        return lines.join('。');
+    }
+    return cleanVerseTextForSpeech(target.textContent);
 }
 
-async function copySelectedSegment() {
-    const copyBtn = document.getElementById('copySegmentBtn');
-    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', copyBtn); return; }
-    const titleElem = document.getElementById('scriptureTitle');
-    const selectedText = getSelectedStructureText();
-    const scriptureEl = document.getElementById('scriptureText');
-    const fullText = (scriptureEl && scriptureEl.innerText) ? scriptureEl.innerText.trim() : '';
-    const content = selectedText || fullText;
-    if (!content) { showCopyFeedback('❌ 沒有可複製段落', copyBtn); return; }
-    const finalCopy = `${titleElem ? titleElem.innerText.trim() : ''}\n\n${content}`.trim();
-    try {
-        await navigator.clipboard.writeText(finalCopy);
-        showCopyFeedback('✅ 已複製段落', copyBtn);
-    } catch {
-        const ta = document.createElement('textarea');
-        ta.value = finalCopy;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showCopyFeedback('📋 已複製 (備份)', copyBtn);
+function getWholePsalmSpeechText() {
+    if (!currentPsalm) return '';
+    if (FULL_TEXTS[currentPsalm] && FULL_TEXTS[currentPsalm].text) {
+        return cleanVerseTextForSpeech(FULL_TEXTS[currentPsalm].text);
     }
+    const scriptureEl = document.getElementById('scriptureText');
+    return cleanVerseTextForSpeech(scriptureEl ? scriptureEl.textContent : '');
+}
+
+function getStructuredSpeechChunks() {
+    const blocks = document.querySelectorAll('#scriptureText .structured-block');
+    if (!blocks.length) return [];
+    const chunks = [];
+    blocks.forEach((block, idx) => {
+        const verseNodes = block.querySelectorAll('.verse-line');
+        if (!verseNodes.length) {
+            const fallback = cleanVerseTextForSpeech(block.textContent);
+            if (fallback) chunks.push({ index: idx, text: fallback });
+            return;
+        }
+        const lines = [];
+        verseNodes.forEach(node => {
+            const clone = node.cloneNode(true);
+            clone.querySelectorAll('.verse-number').forEach(num => num.remove());
+            const t = clone.textContent.trim();
+            if (t) lines.push(t);
+        });
+        const text = lines.join('。');
+        if (text) chunks.push({ index: idx, text });
+    });
+    return chunks;
+}
+
+function isIOSDevice() {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+function pickBestChineseVoice(voices) {
+    if (!voices || !voices.length) return null;
+    const list = voices.map(v => ({ v, sig: `${v.lang} ${v.name}` }));
+    const pick = (patterns) => {
+        for (const p of patterns) {
+            const hit = list.find(item => p.test(item.sig));
+            if (hit) return hit.v;
+        }
+        return null;
+    };
+    if (isIOSDevice()) {
+        const siri = pick([/siri.*zh-hk/i, /siri.*zh-tw/i, /siri.*zh-cn/i, /ting-ting/i, /sin-ji/i, /mei-jia/i]);
+        if (siri) return siri;
+    }
+    return pick([/yue/i, /cantonese/i, /zh-hk/i, /zh-tw/i, /zh-cn/i, /zh/i]);
+}
+
+function clearSpeakingButtonState() {
+    if (!activeSpeechBtn) return;
+    activeSpeechBtn.classList.remove('speaking-once', 'speaking-loop');
+    activeSpeechBtn = null;
+}
+
+function applySpeakingButtonState(btn, repeat) {
+    clearSpeakingButtonState();
+    if (!btn) return;
+    activeSpeechBtn = btn;
+    btn.classList.toggle('speaking-loop', !!repeat);
+    btn.classList.toggle('speaking-once', !repeat);
+}
+
+function speakCantonese(text, btn, successMsg, repeat = false) {
+    const content = (text || '').trim();
+    if (!content) return;
+    if (!('speechSynthesis' in window) || typeof window.SpeechSynthesisUtterance !== 'function') return;
+    applySpeakingButtonState(btn, repeat);
+    speechRepeatEnabled = repeat;
+    const mySession = ++speechSessionId;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(content);
+    utter.lang = 'zh-HK';
+    utter.rate = speechRate;
+    utter.pitch = speechPitch;
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = pickBestChineseVoice(voices);
+    if (preferred) utter.voice = preferred;
+    utter.onerror = () => {
+        speechRepeatEnabled = false;
+        clearSpeakingButtonState();
+    };
+    utter.onend = () => {
+        if (mySession !== speechSessionId) return;
+        if (speechRepeatEnabled && repeat) {
+            setTimeout(() => speakCantonese(content, btn, successMsg, true), 200);
+            return;
+        }
+        clearSpeakingButtonState();
+    };
+    window.speechSynthesis.speak(utter);
+}
+
+function speakSequentialChunks(chunks, btn, repeatCycle = false) {
+    if (!chunks.length) return;
+    if (!('speechSynthesis' in window) || typeof window.SpeechSynthesisUtterance !== 'function') return;
+    applySpeakingButtonState(btn, repeatCycle);
+    speechRepeatEnabled = repeatCycle;
+    const mySession = ++speechSessionId;
+    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices();
+    const preferred = pickBestChineseVoice(voices);
+
+    const speakAt = (idx) => {
+        if (mySession !== speechSessionId) return;
+        const item = chunks[idx];
+        if (!item) {
+            if (speechRepeatEnabled && repeatCycle) {
+                speakAt(0);
+            } else {
+                clearSpeakingButtonState();
+            }
+            return;
+        }
+        if (Number.isInteger(item.index)) scrollStructureBlockToTop(item.index);
+        const utter = new SpeechSynthesisUtterance(item.text);
+        utter.lang = 'zh-HK';
+        utter.rate = speechRate;
+        utter.pitch = speechPitch;
+        if (preferred) utter.voice = preferred;
+        utter.onerror = () => {
+            if (mySession !== speechSessionId) return;
+            speechRepeatEnabled = false;
+            clearSpeakingButtonState();
+        };
+        utter.onend = () => {
+            if (mySession !== speechSessionId) return;
+            speakAt(idx + 1);
+        };
+        window.speechSynthesis.speak(utter);
+    };
+
+    speakAt(0);
+}
+
+function adjustSpeechSetting(type, delta, btn) {
+    if (type === 'rate') {
+        const next = Math.max(0.6, Math.min(1.4, speechRate + delta));
+        speechRate = Math.round(next * 100) / 100;
+        showSpeechSettingHint(`速度 ${speechRate.toFixed(2)}x`, '#b91c1c');
+        return;
+    }
+    if (type === 'pitch') {
+        const next = Math.max(0.7, Math.min(1.5, speechPitch + delta));
+        speechPitch = Math.round(next * 100) / 100;
+        showSpeechSettingHint(`音調 ${speechPitch.toFixed(2)}`, '#166534');
+    }
+}
+
+function showSpeechSettingHint(msg, color) {
+    const hint = document.getElementById('speechSettingHint');
+    if (!hint) return;
+    hint.textContent = msg;
+    hint.style.color = color || '#334155';
+    hint.classList.add('visible');
+    clearTimeout(showSpeechSettingHint._timer);
+    showSpeechSettingHint._timer = setTimeout(() => {
+        hint.classList.remove('visible');
+    }, 1200);
+}
+
+function readWholePsalm() {
+    const btn = document.getElementById('copyScriptureBtn');
+    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    const chunks = getStructuredSpeechChunks();
+    if (chunks.length) {
+        speakSequentialChunks(chunks, btn, false);
+        return;
+    }
+    const panel = document.getElementById('scripturePanel');
+    if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
+    const content = getWholePsalmSpeechText();
+    speakCantonese(content, btn, '🔊 朗讀全篇中');
+}
+
+function readSelectedSegment() {
+    const btn = document.getElementById('copySegmentBtn');
+    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    if (Number.isInteger(selectedStructureIndex)) scrollStructureBlockToTop(selectedStructureIndex);
+    const content = getSelectedStructureSpeechText() || getWholePsalmSpeechText();
+    speakCantonese(content, btn, '🔊 朗讀段落中');
+}
+
+function readWholePsalmRepeat() {
+    const btn = document.getElementById('copyScriptureBtn');
+    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    const chunks = getStructuredSpeechChunks();
+    if (chunks.length) {
+        speakSequentialChunks(chunks, btn, true);
+        return;
+    }
+    const panel = document.getElementById('scripturePanel');
+    if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
+    const content = getWholePsalmSpeechText();
+    speakCantonese(content, btn, '🔁 循環朗讀全篇中', true);
+}
+
+function readSelectedSegmentRepeat() {
+    const btn = document.getElementById('copySegmentBtn');
+    if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
+    if (Number.isInteger(selectedStructureIndex)) scrollStructureBlockToTop(selectedStructureIndex);
+    const content = getSelectedStructureSpeechText() || getWholePsalmSpeechText();
+    speakCantonese(content, btn, '🔁 循環朗讀段落中', true);
+}
+
+function bindShortAndLongPressSpeak(button, onShortPress, onLongPress) {
+    if (!button) return;
+    const LONG_PRESS_MS = 450;
+    let timer = null;
+    let longTriggered = false;
+    let suppressClick = false;
+
+    const clearTimer = () => {
+        if (timer) clearTimeout(timer);
+        timer = null;
+    };
+
+    const start = () => {
+        clearTimer();
+        longTriggered = false;
+        timer = setTimeout(() => {
+            longTriggered = true;
+            suppressClick = true;
+            onLongPress();
+        }, LONG_PRESS_MS);
+    };
+
+    const end = () => {
+        if (!timer && !longTriggered) return;
+        clearTimer();
+        if (!longTriggered) onShortPress();
+    };
+
+    button.addEventListener('pointerdown', start);
+    button.addEventListener('pointerup', end);
+    button.addEventListener('pointercancel', clearTimer);
+    button.addEventListener('pointerleave', clearTimer);
+
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        start();
+    }, { passive: false });
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        end();
+    }, { passive: false });
+    button.addEventListener('touchcancel', clearTimer, { passive: true });
+
+    button.addEventListener('contextmenu', (e) => e.preventDefault());
+    button.addEventListener('click', (e) => {
+        if (suppressClick) {
+            suppressClick = false;
+            e.preventDefault();
+        }
+    });
+}
+
+function bindRepeatPressBtn(button, onAction) {
+    if (!button) return;
+    const LONG_PRESS_DELAY = 500;
+    const REPEAT_INTERVAL = 150;
+    let pressTimer = null;
+    let repeatTimer = null;
+    let longActivated = false;
+    let suppressClick = false;
+
+    const cancelAll = () => {
+        clearTimeout(pressTimer);
+        clearInterval(repeatTimer);
+        pressTimer = null;
+        repeatTimer = null;
+    };
+
+    const startPress = (e) => {
+        e.preventDefault();
+        cancelAll();
+        longActivated = false;
+        pressTimer = setTimeout(() => {
+            longActivated = true;
+            suppressClick = true;
+            onAction();
+            repeatTimer = setInterval(onAction, REPEAT_INTERVAL);
+        }, LONG_PRESS_DELAY);
+    };
+
+    const endPress = (e) => {
+        e.preventDefault();
+        const wasLong = longActivated;
+        cancelAll();
+        if (!wasLong) onAction();
+    };
+
+    button.addEventListener('touchstart', startPress, { passive: false });
+    button.addEventListener('touchend', endPress, { passive: false });
+    button.addEventListener('touchcancel', (e) => { e.preventDefault(); cancelAll(); }, { passive: false });
+    button.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') { cancelAll(); longActivated = false; pressTimer = setTimeout(() => { longActivated = true; suppressClick = true; onAction(); repeatTimer = setInterval(onAction, REPEAT_INTERVAL); }, LONG_PRESS_DELAY); } });
+    button.addEventListener('pointerup', (e) => { if (e.pointerType !== 'touch') { const wasLong = longActivated; cancelAll(); if (!wasLong) onAction(); } });
+    button.addEventListener('pointercancel', (e) => { if (e.pointerType !== 'touch') cancelAll(); });
+    button.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') cancelAll(); });
+    button.addEventListener('contextmenu', (e) => e.preventDefault());
+    button.addEventListener('click', (e) => { if (suppressClick) { suppressClick = false; e.preventDefault(); e.stopPropagation(); } });
+}
+
+function stopSpeaking() {
+    if (!('speechSynthesis' in window)) return;
+    speechRepeatEnabled = false;
+    speechSessionId += 1;
+    window.speechSynthesis.cancel();
+    clearSpeakingButtonState();
 }
 
 function showCopyFeedback(msg, btn) {
@@ -876,7 +1270,7 @@ function init() {
     const grid = document.getElementById('psalmGrid'); grid.innerHTML = '';
     for (let i = 1; i <= 150; i++) {
         const catKey = psalmMap[i]; const cat = categories[catKey] || categories.lament;
-        const cell = document.createElement('div'); cell.className = 'psalm-cell text-slate-700'; cell.style.backgroundColor = cat.hex; cell.textContent = i;
+        const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'psalm-cell text-slate-700'; cell.style.backgroundColor = cat.hex; cell.textContent = i; cell.setAttribute('aria-label', `選擇詩篇第 ${i} 篇`);
         cell.onclick = (e) => { e.stopPropagation(); showDetail(i, cell); };
         grid.appendChild(cell);
     }
@@ -884,7 +1278,7 @@ function init() {
     // 建立圖例
     const legendDiv = document.getElementById('legend'); legendDiv.innerHTML = '';
     Object.entries(categories).forEach(([id, c]) => { 
-        const item = document.createElement('div'); item.className = "legend-item"; 
+        const item = document.createElement('button'); item.type = 'button'; item.className = "legend-item"; item.setAttribute('aria-label', `篩選${c.name}`); 
         item.style.background = `${c.hex}33`;
         item.style.borderLeft = `4px solid ${c.hex}`;
         item.innerHTML = `<span class="text-sm text-slate-700">${c.name}</span><span class="font-bold bg-white/80 px-2.5 py-0.5 rounded-full text-xs">${c.count}</span>`; 
@@ -911,10 +1305,17 @@ function init() {
         } 
     });
     
-    document.getElementById('copyScriptureBtn').addEventListener('click', copyScriptureText);
-    document.getElementById('copySegmentBtn').addEventListener('click', copySelectedSegment);
-    document.getElementById('prevPsalmBtn').addEventListener('click', () => selectRelativePsalm(-1));
-    document.getElementById('nextPsalmBtn').addEventListener('click', () => selectRelativePsalm(1));
+    bindShortAndLongPressSpeak(document.getElementById('copyScriptureBtn'), readWholePsalm, readWholePsalmRepeat);
+    bindShortAndLongPressSpeak(document.getElementById('copySegmentBtn'), readSelectedSegment, readSelectedSegmentRepeat);
+    document.getElementById('stopSpeakBtn').addEventListener('click', stopSpeaking);
+    document.getElementById('rateDownBtn').addEventListener('click', (e) => adjustSpeechSetting('rate', -0.05, e.currentTarget));
+    document.getElementById('rateUpBtn').addEventListener('click', (e) => adjustSpeechSetting('rate', 0.05, e.currentTarget));
+    document.getElementById('pitchDownBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', -0.05, e.currentTarget));
+    document.getElementById('pitchUpBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', 0.05, e.currentTarget));
+    bindRepeatPressBtn(document.getElementById('prevPsalmBtn'), () => selectRelativePsalm(-1));
+    bindRepeatPressBtn(document.getElementById('nextPsalmBtn'), () => selectRelativePsalm(1));
+    bindRepeatPressBtn(document.getElementById('prevSectionBtn'), () => selectRelativeStructure(-1));
+    bindRepeatPressBtn(document.getElementById('nextSectionBtn'), () => selectRelativeStructure(1));
     bindPanelSwitchButtons();
     window.addEventListener('resize', () => {
         syncLandscapeLegendLayout();
