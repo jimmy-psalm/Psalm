@@ -257,6 +257,12 @@
         }
         .arrow-rate { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
         .arrow-pitch { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+        #prevPsalmBtn, #nextPsalmBtn, #prevSectionBtn, #nextSectionBtn {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
         .speech-setting-hint {
             font-size: 10px;
             font-weight: 700;
@@ -1190,6 +1196,52 @@ function bindShortAndLongPressSpeak(button, onShortPress, onLongPress) {
     });
 }
 
+function bindRepeatPressBtn(button, onAction) {
+    if (!button) return;
+    const LONG_PRESS_DELAY = 500;
+    const REPEAT_INTERVAL = 150;
+    let pressTimer = null;
+    let repeatTimer = null;
+    let longActivated = false;
+    let suppressClick = false;
+
+    const cancelAll = () => {
+        clearTimeout(pressTimer);
+        clearInterval(repeatTimer);
+        pressTimer = null;
+        repeatTimer = null;
+    };
+
+    const startPress = (e) => {
+        e.preventDefault();
+        cancelAll();
+        longActivated = false;
+        pressTimer = setTimeout(() => {
+            longActivated = true;
+            suppressClick = true;
+            onAction();
+            repeatTimer = setInterval(onAction, REPEAT_INTERVAL);
+        }, LONG_PRESS_DELAY);
+    };
+
+    const endPress = (e) => {
+        e.preventDefault();
+        const wasLong = longActivated;
+        cancelAll();
+        if (!wasLong) onAction();
+    };
+
+    button.addEventListener('touchstart', startPress, { passive: false });
+    button.addEventListener('touchend', endPress, { passive: false });
+    button.addEventListener('touchcancel', (e) => { e.preventDefault(); cancelAll(); }, { passive: false });
+    button.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') { cancelAll(); longActivated = false; pressTimer = setTimeout(() => { longActivated = true; suppressClick = true; onAction(); repeatTimer = setInterval(onAction, REPEAT_INTERVAL); }, LONG_PRESS_DELAY); } });
+    button.addEventListener('pointerup', (e) => { if (e.pointerType !== 'touch') { const wasLong = longActivated; cancelAll(); if (!wasLong) onAction(); } });
+    button.addEventListener('pointercancel', (e) => { if (e.pointerType !== 'touch') cancelAll(); });
+    button.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') cancelAll(); });
+    button.addEventListener('contextmenu', (e) => e.preventDefault());
+    button.addEventListener('click', (e) => { if (suppressClick) { suppressClick = false; e.preventDefault(); e.stopPropagation(); } });
+}
+
 function stopSpeaking() {
     if (!('speechSynthesis' in window)) return;
     speechRepeatEnabled = false;
@@ -1260,10 +1312,10 @@ function init() {
     document.getElementById('rateUpBtn').addEventListener('click', (e) => adjustSpeechSetting('rate', 0.05, e.currentTarget));
     document.getElementById('pitchDownBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', -0.05, e.currentTarget));
     document.getElementById('pitchUpBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', 0.05, e.currentTarget));
-    document.getElementById('prevPsalmBtn').addEventListener('click', () => selectRelativePsalm(-1));
-    document.getElementById('nextPsalmBtn').addEventListener('click', () => selectRelativePsalm(1));
-    document.getElementById('prevSectionBtn').addEventListener('click', () => selectRelativeStructure(-1));
-    document.getElementById('nextSectionBtn').addEventListener('click', () => selectRelativeStructure(1));
+    bindRepeatPressBtn(document.getElementById('prevPsalmBtn'), () => selectRelativePsalm(-1));
+    bindRepeatPressBtn(document.getElementById('nextPsalmBtn'), () => selectRelativePsalm(1));
+    bindRepeatPressBtn(document.getElementById('prevSectionBtn'), () => selectRelativeStructure(-1));
+    bindRepeatPressBtn(document.getElementById('nextSectionBtn'), () => selectRelativeStructure(1));
     bindPanelSwitchButtons();
     window.addEventListener('resize', () => {
         syncLandscapeLegendLayout();
