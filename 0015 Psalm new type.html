@@ -1152,9 +1152,14 @@ function speakSequentialChunks(chunks, btn, repeatCycle = false) {
                 clearSpeakingButtonState();
                 speechState.isSpeaking = false;
                 speechState.wasFinished = true;
+                // 順序播放中：所有段落朗讀完成後跳到下一首詩篇
+                if (sequentialPlayActive) {
+                    onSequentialPsalmEnd();
+                }
             }
             return;
         }
+
         if (Number.isInteger(item.index)) scrollStructureBlockToTop(item.index);
         const utter = new SpeechSynthesisUtterance(item.text);
         utter.lang = 'zh-HK';
