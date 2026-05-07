@@ -846,12 +846,15 @@ function showDetail(n, el) {
     const wasSpeaking = speechState.isSpeaking;
     const savedState = { ...speechState };
     if (wasSpeaking) {
-        // 順序播放中：不停止朗讀，只切換 UI 內容
-        // 由 onSequentialPsalmEnd() 的 setTimeout 重新開始朗讀
-        if (!sequentialPlayActive) {
+        // 順序播放中：只取消當前朗讀（cancel speech），不停止順序播放
+        // 由 onSequentialPsalmEnd() 的 setTimeout 重新開始朗讀新詩篇
+        if (sequentialPlayActive) {
+            cancelCurrentSpeech();
+        } else {
             stopSpeaking();
         }
     }
+
     currentPsalm = n;
 
     document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('active'));
@@ -1356,20 +1359,25 @@ function bindRepeatPressBtn(button, onAction) {
     button.addEventListener('click', (e) => { if (suppressClick) { suppressClick = false; e.preventDefault(); e.stopPropagation(); } });
 }
 
-function stopSpeaking() {
+function cancelCurrentSpeech() {
+    // 只取消朗讀，不停止順序播放（保留 sequentialPlayActive）
     if (!('speechSynthesis' in window)) return;
     speechRepeatEnabled = false;
     speechSessionId += 1;
     window.speechSynthesis.cancel();
     clearSpeakingButtonState();
-    // 如果正在朗讀，標記為已停止
     if (speechState.isSpeaking) {
         speechState.wasStopped = true;
         speechState.isSpeaking = false;
     }
+}
+
+function stopSpeaking() {
+    cancelCurrentSpeech();
     // 停止順序播放
     sequentialPlayActive = false;
 }
+
 
 
 function resumeSpeakingIfNeeded() {
