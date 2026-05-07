@@ -846,9 +846,14 @@ function showDetail(n, el) {
     const wasSpeaking = speechState.isSpeaking;
     const savedState = { ...speechState };
     if (wasSpeaking) {
-        stopSpeaking();
+        // 順序播放中：不停止朗讀，只切換 UI 內容
+        // 由 onSequentialPsalmEnd() 的 setTimeout 重新開始朗讀
+        if (!sequentialPlayActive) {
+            stopSpeaking();
+        }
     }
     currentPsalm = n;
+
     document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('active'));
     if (el) el.classList.add('active');
     
