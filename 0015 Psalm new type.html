@@ -1687,7 +1687,13 @@ function init() {
     syncPanelSwitchButtons();
     
     document.getElementById('resetBtn').onclick = () => { 
-        stopSpeaking();
+        // 順序播放中：只取消當前朗讀，不停止順序播放
+        // 與其他圖例按鈕行為一致
+        if (sequentialPlayActive) {
+            cancelCurrentSpeech();
+        } else {
+            stopSpeaking();
+        }
         document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('dimmed')); 
         document.getElementById('resetBtn').classList.add('hidden'); 
         // 清除圖例高亮
@@ -1696,9 +1702,10 @@ function init() {
         const display = document.getElementById('filterTypeDisplay');
         display.classList.add('hidden');
         display.textContent = '';
-        // 清除篩選類型記錄
+        // 清除篩選類型記錄（設為 null 表示全部詩篇）
         currentFilterTypeId = null;
     };
+
 
 
     
