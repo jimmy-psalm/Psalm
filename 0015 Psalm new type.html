@@ -1687,11 +1687,9 @@ function init() {
     syncPanelSwitchButtons();
     
     document.getElementById('resetBtn').onclick = () => { 
-        // 順序播放中：只取消當前朗讀，不停止順序播放
-        // 與其他圖例按鈕行為一致
-        if (sequentialPlayActive) {
-            cancelCurrentSpeech();
-        } else {
+        // 順序播放中：不取消當前朗讀，讓當前詩篇繼續朗讀
+        // 朗讀完成後 onSequentialPsalmEnd() 會檢查新的篩選類型（null = 全部詩篇）
+        if (!sequentialPlayActive) {
             stopSpeaking();
         }
         document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('dimmed')); 
@@ -1705,6 +1703,7 @@ function init() {
         // 清除篩選類型記錄（設為 null 表示全部詩篇）
         currentFilterTypeId = null;
     };
+
 
 
 
