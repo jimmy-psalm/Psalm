@@ -735,7 +735,10 @@ function renderStructureTags(psalmNum) {
             const wasSpeaking = speechState.isSpeaking;
             const savedState = { ...speechState };
             if (wasSpeaking) {
-                stopSpeaking();
+                // 順序播放中：不停止朗讀，只切換段落繼續朗讀
+                if (!sequentialPlayActive) {
+                    stopSpeaking();
+                }
             }
             const idx = Number(btn.dataset.structureIndex);
             selectedStructureIndex = idx;
@@ -749,6 +752,7 @@ function renderStructureTags(psalmNum) {
             }
         });
     });
+
 }
 
 function setActiveStructureTag(structureIndex) {
@@ -783,7 +787,10 @@ function selectRelativeStructure(delta) {
     const wasSpeaking = speechState.isSpeaking;
     const savedState = { ...speechState };
     if (wasSpeaking) {
-        stopSpeaking();
+        // 順序播放中：不停止朗讀，只切換段落繼續朗讀
+        if (!sequentialPlayActive) {
+            stopSpeaking();
+        }
     }
     selectStructureByIndex(base + delta);
     // 如果之前正在朗讀，切換後自動恢復朗讀
@@ -793,6 +800,7 @@ function selectRelativeStructure(delta) {
         resumeSpeakingIfNeeded();
     }
 }
+
 
 function scrollStructureBlockToTop(structureIndex) {
     if (!Number.isInteger(structureIndex) || structureIndex < 0) return;
@@ -1107,7 +1115,12 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
         clearSpeakingButtonState();
         speechState.isSpeaking = false;
         speechState.wasFinished = true;
+        // 順序播放中：朗讀完成後檢查是否需要跳到下一首詩篇
+        if (sequentialPlayActive) {
+            onSequentialPsalmEnd();
+        }
     };
+
     window.speechSynthesis.speak(utter);
 }
 
@@ -1640,9 +1653,17 @@ function init() {
         item.style.background = `${c.hex}33`;
         item.style.borderLeft = `4px solid ${c.hex}`;
         item.innerHTML = `<span class="text-sm text-slate-700">${c.name}</span><span class="font-bold bg-white/80 px-2.5 py-0.5 rounded-full text-xs">${c.count}</span>`; 
-        item.onclick = () => { stopSpeaking(); filter(id); }; 
+        item.onclick = () => { 
+            // 順序播放中：不停止朗讀，只更新篩選類型，讓當前詩篇繼續朗讀
+            // 朗讀完畢後 onSequentialPsalmEnd() 會檢查新的篩選類型
+            if (!sequentialPlayActive) {
+                stopSpeaking(); 
+            }
+            filter(id); 
+        }; 
         legendDiv.appendChild(item); 
     });
+
 
     syncLandscapeLegendLayout();
     syncPanelSwitchButtons();
