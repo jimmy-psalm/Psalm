@@ -1,0 +1,36 @@
+A.Panel 1 : 
+1.文體分佈統計 change to 詩篇類型統計 
+2.詩篇類型 no need English, only Chinese is ok
+3. decrease the row to row spacing to half of existing distance
+4. Psalm type should have their color conformed with the color of Panel 2 Psamls color
+5. Font size of 詩篇類型統計 should be same as Panel 2's 詩篇全景 (1-150) 
+6. Change the thin line under the heading 詩篇類型統計 to thick line similar to panel 3 header line
+
+B.Panel 2 : 
+1. Remove the words 每列15篇 · 
+2. Remove the words (1-150)
+3. Remove the words 矩陣
+4. Remove the square symbol on the left of 詩篇全景 (1-150)
+5  Relocate the words 點擊/觸摸方格 to original position of 矩陣
+6. Change the thin line under the heading 詩篇全景 (1-150) to thick line similar to panel 3 header line
+7. Remove the whole row of ⬅️ ➡️ 左右移動 ⬆️ ⬇️ 上下移動 🔘 Tab 切換篩選後篇章
+
+C. Panel 3 :
+1. Remove 推薦原因 and its content (no need to display)
+2. 經典金句 replace the position of 推薦原因
+3. Remove the words 經文高亮｜完整背景
+4. The word 結構標籤 change to 點擊結構標籤以顯示經文
+5. Font size of 詩篇分析 should be same as Panel 2's 詩篇全景 (1-150)
+6. The word 詩篇文體 change to e.g.(詩篇類型 : 君王詩) no english
+7. Double the font size of 詩篇結構分析, 作者和他的情緒,寫作背景,核心主題,內容概要
+,適合的處境／情緒, 經典金句 (they have to be the same font size but different color)
+8. Change the Left & right arrow buttons to  "< 上一篇" and "下一篇 >"button
+
+D. Panel 4 :
+1. Font size of 經文全文 should be same as Panel 2's 詩篇全景 (1-150) 
+2. Change the thin line under the heading 經文全文 to thick line similar to panel 3 header line
+3. Remove 📌 symbol for all 結構標籤
+4. add a button "複製這段落經文" the function is 複製由標籤所選的這段落經文經文，如果未有選過標籤，就選顯示最上邊一段複製
+5. Change the name of button of 複製經文 to 複製全篇經文
+
+E. In landscape mode of mobile (exclude PC, as there are plenty of space), make the screen display two panel at a time, a  two by two display, that is to say panel 1 & 2 side by side, panel 3 & 4 side by side, when one of the Psalm is selected in panel 2, the screen immediately scroll to Panel 3 & 4, or user scroll the screen up Panel 1 & 2 will change to display panel 3 & 4(only for mobile landscape mode)
