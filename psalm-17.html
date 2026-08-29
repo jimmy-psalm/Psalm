@@ -553,9 +553,34 @@ let sequentialPlayActive = false;  // 是否正在順序播放
 let currentFilterTypeId = null;    // 舊 17類 id（保留給分析面板小圓點）
 let currentFilterMajor = null;
 
-let GUIDE_FILTER = (window.PSALM_COMPLETE_DATA)
-    || (window.PSALM_APP_DATA && window.PSALM_APP_DATA.GUIDE_FILTER)
-    || { groups: [], categories: {}, psalms: {} };
+function buildGuideFilterFromOriginal(raw) {
+    if (!raw || !raw.taxonomy || !raw.psalms) return { groups: [], categories: {}, psalms: {} };
+    const groups = (raw.metadata && raw.metadata.guides || Object.keys(raw.taxonomy)).map(id => ({
+        id,
+        categories: Object.keys(raw.taxonomy[id] || {})
+    }));
+    const categories = {};
+    Object.entries(raw.taxonomy).forEach(([guide, cats]) => {
+        Object.entries(cats || {}).forEach(([cat, tags]) => {
+            categories[cat] = { group: guide, tags: tags.slice() };
+        });
+    });
+    const psalms = {};
+    raw.psalms.forEach(p => {
+        const n = String(p.id || '').replace(/\D/g, '');
+        if (!n) return;
+        const labels = {};
+        Object.values(p.categories || {}).forEach(items => {
+            (items || []).forEach(item => {
+                if (item && item.category && item.tag) labels[item.category] = item.tag;
+            });
+        });
+        psalms[n] = labels;
+    });
+    return { groups, categories, psalms };
+}
+
+let GUIDE_FILTER = buildGuideFilterFromOriginal(window.PSALM_DATA);
 let activeGuideGroup = '文學';
 let selectedGuideTags = {}; // { 類別名稱: 標籤名稱 }
 
@@ -2006,13 +2031,11 @@ let hasInitialized = false;
 function startApp() {
     if (hasInitialized) return;
     hasInitialized = true;
-    GUIDE_FILTER = (window.PSALM_COMPLETE_DATA)
-        || (window.PSALM_APP_DATA && window.PSALM_APP_DATA.GUIDE_FILTER)
-        || GUIDE_FILTER;
+    GUIDE_FILTER = buildGuideFilterFromOriginal(window.PSALM_DATA);
     if (!window.PSALM_APP_DATA) {
         alert('找不到 psalm-data-17.js，請確認 HTML 與 psalm-data-17.js 在同一資料夾。');
-    } else if (!GUIDE_FILTER.groups || !GUIDE_FILTER.groups.length) {
-        alert('找不到 psalm_data_complete.js，請確認五向導 × 17類標籤資料檔在同一資料夾。');
+    } else if (!window.PSALM_DATA || !GUIDE_FILTER.groups.length) {
+        alert('找不到原始 psalm_data_complete.js，請確認資料檔在同一資料夾。');
     }
     init();
 }
