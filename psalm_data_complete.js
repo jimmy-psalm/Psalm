@@ -17282,3 +17282,7 @@ const PSALM_DATA = {
     }
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.PSALM_DATA = PSALM_DATA;
+}
