@@ -123,6 +123,18 @@
             padding: 4px 9px; font-size: 0.72rem; font-weight: 700; line-height: 1.3;
         }
         .guide-pill.selected { background: #1f3d3a; color: #fff; }
+        .guide-analysis-block { margin-bottom: 0.85rem; }
+        .guide-analysis-title { font-size: 0.95rem; font-weight: 800; color: #166534; margin-bottom: 0.35rem; }
+        .guide-analysis-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 0.4rem; }
+        .guide-analysis-pill {
+            appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
+            background: #dcfce7; color: #166534; border-radius: 9999px;
+            padding: 3px 10px; font-size: 0.75rem; font-weight: 700;
+        }
+        .guide-analysis-desc {
+            background: #f3f4f6; color: #334155; border-radius: 10px;
+            padding: 8px 10px; font-size: 0.82rem; line-height: 1.55;
+        }
 
         button, .psalm-cell, .legend-item { touch-action: manipulation; }
         @media (min-width: 768px) {
@@ -418,9 +430,10 @@
                         <p id="pTypeLabel" class="text-base font-bold whitespace-nowrap"></p>
                     </div>
                     <div>
-                        <div class="info-label">17類標籤（本篇每類 1 個，點選可交叉篩選）</div>
-                        <div id="tagDots"></div>
-                        <div id="tagPills" class="mt-2 flex flex-wrap gap-1.5"></div>
+                        <div class="info-label">五向導分析（來自 psalm_data_complete.js，點選標籤可篩選）</div>
+                        <div id="guideAnalysis" class="mt-2"></div>
+                        <div id="tagDots" class="hidden"></div>
+                        <div id="tagPills" class="hidden"></div>
                     </div>
 
                     <!-- 詩篇結構分析 -->
@@ -1065,6 +1078,7 @@ function showDetail(n, el) {
     document.getElementById('pTypeLabel').textContent = `(五大類：${cls.major} · ${cls.primary}${oldType})`;
     document.getElementById('pTypeLabel').style.color = majorHex;
     renderPsalmTagDots(n);
+    renderGuideAnalysis(n);
     document.getElementById('pTheme').textContent = data.theme;
     document.getElementById('pContent').textContent = data.content;
     document.getElementById('pGolden').textContent = `「${data.golden}」`;
@@ -1175,6 +1189,53 @@ function filterMajor(majorName) {
     currentFilterTypeId = null;
     currentFilterMajor = majorName;
     applyGridFilter();
+}
+
+function getOriginalPsalm(n) {
+    const raw = window.PSALM_DATA;
+    if (!raw || !Array.isArray(raw.psalms)) return null;
+    const key = String(n);
+    return raw.psalms.find(p => String(p.id || '').replace(/\D/g, '') === key) || null;
+}
+
+function renderGuideAnalysis(n) {
+    const box = document.getElementById('guideAnalysis');
+    if (!box) return;
+    box.innerHTML = '';
+    const raw = getOriginalPsalm(n);
+    const groups = (GUIDE_FILTER.groups || []).map(g => g.id);
+    if (!raw || !groups.length) {
+        box.innerHTML = '<p class="text-sm text-gray-400">找不到五向導分析資料。</p>';
+        return;
+    }
+    groups.forEach(guide => {
+        const block = document.createElement('div');
+        block.className = 'guide-analysis-block';
+        const title = document.createElement('div');
+        title.className = 'guide-analysis-title';
+        title.textContent = guide;
+        block.appendChild(title);
+        const pills = document.createElement('div');
+        pills.className = 'guide-analysis-pills';
+        (raw.categories && raw.categories[guide] || []).forEach(item => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'guide-analysis-pill';
+            btn.textContent = item.tag;
+            btn.setAttribute('aria-label', `篩選 ${guide} ${item.category} ${item.tag}`);
+            btn.onclick = () => {
+                setActiveGuideGroup(guide);
+                toggleGuideTag(item.category, item.tag);
+            };
+            pills.appendChild(btn);
+        });
+        block.appendChild(pills);
+        const desc = document.createElement('div');
+        desc.className = 'guide-analysis-desc';
+        desc.textContent = (raw.description && raw.description[guide]) || '';
+        block.appendChild(desc);
+        box.appendChild(block);
+    });
 }
 
 function renderPsalmTagDots(n) {
