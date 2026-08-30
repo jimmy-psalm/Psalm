@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>詩篇全景 | 五向導·17類標籤搜尋與經文朗讀</title>
+    <title>詩篇全景 | 搜尋手冊與經文朗讀</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700;14..32,800&family=Noto+Serif+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -93,12 +93,16 @@
         }
         .tag-pill.lit-pill { outline: 2px solid #1e293b; outline-offset: 1px; }
 
-        .guide-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 6px 0 8px; }
-        .guide-tab {
+        .facet-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 6px 0 6px; }
+        .facet-tab, .guide-tab {
             appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
             border-radius: 10px; padding: 8px 4px; font-size: 0.82rem; font-weight: 800;
             background: #e8ebe6; color: #334155;
         }
+        .facet-tab.active { background: #1e3a5f; color: #fff; }
+        .facet-hint { font-size: 0.72rem; color: #64748b; font-weight: 600; margin: 0 0 8px; line-height: 1.4; }
+        .guide-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 0 0 8px; }
+        .guide-tabs.is-hidden { display: none; }
         .guide-tab.active { background: #166534; color: #fff; }
         .guide-result {
             display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -380,12 +384,14 @@
         <div class="panel-card p-3">
             <div id="panel1Header" class="flex items-center justify-between border-b-2 border-slate-300 pb-1 mb-1.5">
                 <div>
-                    <h3 class="font-extrabold text-gray-800 text-base">📖 詩篇分析篩選</h3>
-                    <p class="text-[11px] text-slate-500 font-semibold mt-0.5">五向導 × 17類標籤 (每類別每詩篇1個)</p>
+                    <h3 class="font-extrabold text-gray-800 text-base">📖 搜尋手冊</h3>
+                    <p class="text-[11px] text-slate-500 font-semibold mt-0.5">先選找法，再選標籤；亮起的圓點可點來看經文</p>
                 </div>
                 <button id="jumpDownBtn1" type="button" class="panel-jump-btn" aria-label="切換到下方面板">▼</button>
             </div>
-            <div id="guideTabs" class="guide-tabs"></div>
+            <div id="facetTabs" class="facet-tabs"></div>
+            <p id="facetHint" class="facet-hint"></p>
+            <div id="guideTabs" class="guide-tabs is-hidden"></div>
             <div class="guide-result">
                 <span id="guideResultText" class="guide-result-text">符合: 150 首</span>
                 <button id="resetBtn" type="button" class="guide-clear" disabled>清除</button>
@@ -430,7 +436,7 @@
                         <p id="pTypeLabel" class="text-base font-bold whitespace-nowrap"></p>
                     </div>
                     <div>
-                        <div class="info-label">五向導分析（來自 psalm_data_complete.js，點選標籤可篩選）</div>
+                        <div class="info-label">五向導分析（點選標籤可到綜合導讀篩選）</div>
                         <div id="guideAnalysis" class="mt-2"></div>
                         <div id="tagDots" class="hidden"></div>
                         <div id="tagPills" class="hidden"></div>
@@ -516,6 +522,7 @@
 
 <script src="./psalm-data-17.js"></script>
 <script src="./psalm_data_complete.js"></script>
+<script src="./psalm-search-index.js"></script>
 <script>
 // ============================================================================
 // 📍 位置 1：經文資料（保持原有 FULL_TEXTS，此處省略以節省空間，請保留你的完整資料）
@@ -566,36 +573,22 @@ let sequentialPlayActive = false;  // 是否正在順序播放
 let currentFilterTypeId = null;    // 舊 17類 id（保留給分析面板小圓點）
 let currentFilterMajor = null;
 
-function buildGuideFilterFromOriginal(raw) {
-    if (!raw || !raw.taxonomy || !raw.psalms) return { groups: [], categories: {}, psalms: {} };
-    const groups = (raw.metadata && raw.metadata.guides || Object.keys(raw.taxonomy)).map(id => ({
-        id,
-        categories: Object.keys(raw.taxonomy[id] || {})
-    }));
-    const categories = {};
-    Object.entries(raw.taxonomy).forEach(([guide, cats]) => {
-        Object.entries(cats || {}).forEach(([cat, tags]) => {
-            categories[cat] = { group: guide, tags: tags.slice() };
-        });
-    });
-    const psalms = {};
-    raw.psalms.forEach(p => {
-        const n = String(p.id || '').replace(/\D/g, '');
-        if (!n) return;
-        const labels = {};
-        Object.values(p.categories || {}).forEach(items => {
-            (items || []).forEach(item => {
-                if (item && item.category && item.tag) labels[item.category] = item.tag;
-            });
-        });
-        psalms[n] = labels;
-    });
-    return { groups, categories, psalms };
+function asTagList(value) {
+    if (Array.isArray(value)) return value.filter(Boolean);
+    return value ? [value] : [];
 }
 
-let GUIDE_FILTER = buildGuideFilterFromOriginal(window.PSALM_DATA);
+function buildGuideFilterFromIndex(index) {
+    if (index && index.guide && index.guide.groups) return index.guide;
+    return { groups: [], categories: {}, psalms: {} };
+}
+
+let SEARCH_INDEX = window.SEARCH_INDEX || {};
+let GUIDE_FILTER = buildGuideFilterFromIndex(SEARCH_INDEX);
+let activeFacet = 'genre';
 let activeGuideGroup = '文學';
-let selectedGuideTags = {}; // { 類別名稱: 標籤名稱 }
+let selectedSimpleTags = []; // 文體／處境／傳統：多標 OR
+let selectedGuideTags = {}; // { 類別名稱: [標籤] }
 
 let CLASSIFICATION = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.CLASSIFICATION) || { majors: [], types: [], psalms: {} };
 const MAJOR_COLORS = {
@@ -980,34 +973,68 @@ function getGuideLabels(n) {
 }
 
 function selectedGuideEntries() {
-    return Object.entries(selectedGuideTags).filter(([, tag]) => !!tag);
+    return Object.entries(selectedGuideTags).filter(([, tags]) => asTagList(tags).length > 0);
+}
+
+function labelsForCat(labels, cat) {
+    return asTagList(labels[cat]);
 }
 
 function psalmMatchesGuide(n) {
     const labels = getGuideLabels(n);
-    return selectedGuideEntries().every(([cat, tag]) => labels[cat] === tag);
+    return selectedGuideEntries().every(([cat, tags]) => {
+        const have = labelsForCat(labels, cat);
+        return asTagList(tags).some(tag => have.includes(tag));
+    });
+}
+
+function simpleFacetPsalms(tag) {
+    const facet = SEARCH_INDEX[activeFacet] || {};
+    const list = (facet.psalms && facet.psalms[tag]) || [];
+    return list.map(Number);
+}
+
+function psalmMatchesSimple(n) {
+    if (!selectedSimpleTags.length) return true;
+    return selectedSimpleTags.some(tag => simpleFacetPsalms(tag).includes(Number(n)));
+}
+
+function hasActiveSearch() {
+    if (activeFacet === 'guide') return selectedGuideEntries().length > 0;
+    return selectedSimpleTags.length > 0;
 }
 
 function psalmMatchesFilter(n, typeId = currentFilterTypeId, major = currentFilterMajor) {
-    if (selectedGuideEntries().length) return psalmMatchesGuide(n);
+    if (hasActiveSearch()) {
+        return activeFacet === 'guide' ? psalmMatchesGuide(n) : psalmMatchesSimple(n);
+    }
     const info = getPsalmClass(n);
     if (typeId != null) return info.tagIds.includes(Number(typeId));
     if (major) return info.major === major;
     return true;
 }
 
-function countGuideMatches() {
+function countSearchMatches() {
     let c = 0;
-    for (let i = 1; i <= 150; i++) if (psalmMatchesGuide(i)) c++;
+    for (let i = 1; i <= 150; i++) if (psalmMatchesFilter(i)) c++;
     return c;
 }
 
 function countGuideTag(cat, tag) {
     let c = 0;
     for (let i = 1; i <= 150; i++) {
-        if (getGuideLabels(i)[cat] === tag) c++;
+        if (labelsForCat(getGuideLabels(i), cat).includes(tag)) c++;
     }
     return c;
+}
+
+function countSimpleTag(tag) {
+    return simpleFacetPsalms(tag).length;
+}
+
+function genreLabelsFor(n) {
+    const facet = SEARCH_INDEX.genre || {};
+    return (facet.tags || []).filter(tag => ((facet.psalms && facet.psalms[tag]) || []).map(Number).includes(Number(n)));
 }
 
 function generatePsalmMap() {
@@ -1074,8 +1101,8 @@ function showDetail(n, el) {
     document.getElementById('pTitleDisplay').textContent = `第 ${n} 篇`;
     
     // 五大類 + 主分類（舊 type 僅作補充）
-    const oldType = data.type ? `｜舊標籤：${data.type}` : '';
-    document.getElementById('pTypeLabel').textContent = `(五大類：${cls.major} · ${cls.primary}${oldType})`;
+    const genreText = genreLabelsFor(n).join(' · ') || cls.primary;
+    document.getElementById('pTypeLabel').textContent = `(文體：${genreText})`;
     document.getElementById('pTypeLabel').style.color = majorHex;
     renderPsalmTagDots(n);
     renderGuideAnalysis(n);
@@ -1113,9 +1140,16 @@ function clearLegendActive() {
     document.querySelectorAll('.legend-item, .legend-group-title').forEach(item => item.classList.remove('legend-active'));
 }
 
+function currentSelectedLabels() {
+    if (activeFacet === 'guide') {
+        return selectedGuideEntries().flatMap(([cat, tags]) => asTagList(tags).map(tag => `${cat}·${tag}`));
+    }
+    return selectedSimpleTags.slice();
+}
+
 function updateGuideResultBar() {
-    const selected = selectedGuideEntries();
-    const matches = selected.length ? countGuideMatches() : 150;
+    const selected = currentSelectedLabels();
+    const matches = hasActiveSearch() ? countSearchMatches() : 150;
     const text = document.getElementById('guideResultText');
     if (text) {
         text.textContent = selected.length
@@ -1123,11 +1157,11 @@ function updateGuideResultBar() {
             : '符合: 150 首';
     }
     const resetBtn = document.getElementById('resetBtn');
-    if (resetBtn) resetBtn.disabled = selected.length === 0;
+    if (resetBtn) resetBtn.disabled = !hasActiveSearch() && !currentFilterTypeId && !currentFilterMajor;
     const display = document.getElementById('filterTypeDisplay');
     if (display) {
         if (selected.length) {
-            display.textContent = selected.map(([cat, tag]) => `${cat}-${tag}`).join(' + ');
+            display.textContent = selected.join(' + ');
             display.classList.remove('hidden');
         } else {
             display.textContent = '';
@@ -1137,7 +1171,7 @@ function updateGuideResultBar() {
 }
 
 function applyGridFilter() {
-    const filtering = selectedGuideEntries().length > 0 || currentFilterTypeId != null || currentFilterMajor;
+    const filtering = hasActiveSearch() || currentFilterTypeId != null || currentFilterMajor;
     document.querySelectorAll('.psalm-cell').forEach(cell => {
         const num = parseInt(cell.textContent, 10);
         const match = psalmMatchesFilter(num);
@@ -1145,32 +1179,57 @@ function applyGridFilter() {
         cell.classList.toggle('lit', filtering && match);
     });
     updateGuideResultBar();
+    if (currentPsalm) {
+        renderGuideAnalysis(currentPsalm);
+        renderPsalmTagDots(currentPsalm);
+    }
+}
+
+function toggleSimpleTag(tag) {
+    if (!sequentialPlayActive) stopSpeaking();
+    const i = selectedSimpleTags.indexOf(tag);
+    if (i >= 0) selectedSimpleTags.splice(i, 1);
+    else selectedSimpleTags.push(tag);
+    currentFilterTypeId = null;
+    currentFilterMajor = null;
+    renderSearchManual();
+    applyGridFilter();
 }
 
 function toggleGuideTag(category, tag) {
     if (!sequentialPlayActive) stopSpeaking();
-    if (selectedGuideTags[category] === tag) delete selectedGuideTags[category];
-    else selectedGuideTags[category] = tag;
+    const cur = asTagList(selectedGuideTags[category]);
+    const next = cur.includes(tag) ? cur.filter(t => t !== tag) : cur.concat(tag);
+    if (next.length) selectedGuideTags[category] = next;
+    else delete selectedGuideTags[category];
     currentFilterTypeId = null;
     currentFilterMajor = null;
-    renderGuideCategories();
+    renderSearchManual();
+    applyGridFilter();
+}
+
+function setActiveFacet(facetId) {
+    activeFacet = facetId;
+    if (facetId === 'guide' && !activeGuideGroup) activeGuideGroup = '文學';
+    currentFilterTypeId = null;
+    currentFilterMajor = null;
+    renderSearchManual();
     applyGridFilter();
 }
 
 function setActiveGuideGroup(groupId) {
     activeGuideGroup = groupId;
-    document.querySelectorAll('.guide-tab').forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-group') === groupId);
-    });
-    renderGuideCategories();
+    activeFacet = 'guide';
+    renderSearchManual();
 }
 
 function clearGuideFilters() {
     if (!sequentialPlayActive) stopSpeaking();
     selectedGuideTags = {};
+    selectedSimpleTags = [];
     currentFilterTypeId = null;
     currentFilterMajor = null;
-    renderGuideCategories();
+    renderSearchManual();
     applyGridFilter();
 }
 
@@ -1179,9 +1238,11 @@ function filter(typeId) {
     currentFilterTypeId = tid;
     currentFilterMajor = null;
     const t = (CLASSIFICATION.types || []).find(x => Number(x.id) === tid);
-    if (t && GUIDE_FILTER.categories[t.name]) {
-        selectedGuideTags[t.name] = t.name;
+    if (t) {
+        activeFacet = 'genre';
+        selectedSimpleTags = [t.name];
     }
+    renderSearchManual();
     applyGridFilter();
 }
 
@@ -1203,12 +1264,14 @@ function renderGuideAnalysis(n) {
     if (!box) return;
     box.innerHTML = '';
     const raw = getOriginalPsalm(n);
-    const groups = (GUIDE_FILTER.groups || []).map(g => g.id);
-    if (!raw || !groups.length) {
+    const labels = getGuideLabels(n);
+    const groups = GUIDE_FILTER.groups || [];
+    if (!groups.length) {
         box.innerHTML = '<p class="text-sm text-gray-400">找不到五向導分析資料。</p>';
         return;
     }
-    groups.forEach(guide => {
+    groups.forEach(group => {
+        const guide = group.id;
         const block = document.createElement('div');
         block.className = 'guide-analysis-block';
         const title = document.createElement('div');
@@ -1217,22 +1280,29 @@ function renderGuideAnalysis(n) {
         block.appendChild(title);
         const pills = document.createElement('div');
         pills.className = 'guide-analysis-pills';
-        (raw.categories && raw.categories[guide] || []).forEach(item => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'guide-analysis-pill';
-            btn.textContent = item.tag;
-            btn.setAttribute('aria-label', `篩選 ${guide} ${item.category} ${item.tag}`);
-            btn.onclick = () => {
-                setActiveGuideGroup(guide);
-                toggleGuideTag(item.category, item.tag);
-            };
-            pills.appendChild(btn);
+        (group.categories || []).forEach(cat => {
+            labelsForCat(labels, cat).forEach(tag => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'guide-analysis-pill';
+                const selected = asTagList(selectedGuideTags[cat]).includes(tag);
+                if (selected) {
+                    btn.style.background = '#1f3d3a';
+                    btn.style.color = '#fff';
+                }
+                btn.textContent = `${cat} · ${tag}`;
+                btn.setAttribute('aria-label', `篩選 ${guide} ${cat} ${tag}`);
+                btn.onclick = () => {
+                    setActiveGuideGroup(guide);
+                    toggleGuideTag(cat, tag);
+                };
+                pills.appendChild(btn);
+            });
         });
         block.appendChild(pills);
         const desc = document.createElement('div');
         desc.className = 'guide-analysis-desc';
-        desc.textContent = (raw.description && raw.description[guide]) || '';
+        desc.textContent = (raw && raw.description && raw.description[guide]) || '';
         block.appendChild(desc);
         box.appendChild(block);
     });
@@ -1247,20 +1317,21 @@ function renderPsalmTagDots(n) {
     pills.innerHTML = '';
     (GUIDE_FILTER.groups || []).forEach(group => {
         (group.categories || []).forEach(cat => {
-            const tag = labels[cat];
-            if (!tag) return;
-            const pill = document.createElement('button');
-            pill.type = 'button';
-            pill.className = 'tag-pill';
-            pill.style.background = selectedGuideTags[cat] === tag ? '#1f3d3a' : '#e2e8f0';
-            pill.style.color = selectedGuideTags[cat] === tag ? '#fff' : '#1e293b';
-            pill.textContent = `${cat} · ${tag}`;
-            pill.setAttribute('aria-label', `篩選 ${group.id} ${cat} ${tag}`);
-            pill.onclick = () => {
-                setActiveGuideGroup(group.id);
-                toggleGuideTag(cat, tag);
-            };
-            pills.appendChild(pill);
+            labelsForCat(labels, cat).forEach(tag => {
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = 'tag-pill';
+                const selected = asTagList(selectedGuideTags[cat]).includes(tag);
+                pill.style.background = selected ? '#1f3d3a' : '#e2e8f0';
+                pill.style.color = selected ? '#fff' : '#1e293b';
+                pill.textContent = `${cat} · ${tag}`;
+                pill.setAttribute('aria-label', `篩選 ${group.id} ${cat} ${tag}`);
+                pill.onclick = () => {
+                    setActiveGuideGroup(group.id);
+                    toggleGuideTag(cat, tag);
+                };
+                pills.appendChild(pill);
+            });
         });
     });
 }
@@ -1972,10 +2043,33 @@ function onSequentialPsalmEnd() {
     }
 }
 
+function renderFacetTabs() {
+    const tabs = document.getElementById('facetTabs');
+    const hint = document.getElementById('facetHint');
+    if (!tabs) return;
+    tabs.innerHTML = '';
+    (SEARCH_INDEX.facets || []).forEach(facet => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'facet-tab' + (facet.id === activeFacet ? ' active' : '');
+        btn.textContent = facet.name;
+        btn.setAttribute('aria-label', `搜尋手冊：${facet.name}`);
+        btn.onclick = () => setActiveFacet(facet.id);
+        tabs.appendChild(btn);
+    });
+    if (hint) {
+        const current = (SEARCH_INDEX.facets || []).find(f => f.id === activeFacet);
+        hint.textContent = current ? current.hint : '';
+    }
+}
+
 function renderGuideTabs() {
     const tabs = document.getElementById('guideTabs');
     if (!tabs) return;
     tabs.innerHTML = '';
+    const show = activeFacet === 'guide';
+    tabs.classList.toggle('is-hidden', !show);
+    if (!show) return;
     (GUIDE_FILTER.groups || []).forEach(group => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -1986,6 +2080,32 @@ function renderGuideTabs() {
         btn.onclick = () => setActiveGuideGroup(group.id);
         tabs.appendChild(btn);
     });
+}
+
+function renderSimpleFacetPills() {
+    const legendDiv = document.getElementById('legend');
+    if (!legendDiv) return;
+    legendDiv.innerHTML = '';
+    const facet = SEARCH_INDEX[activeFacet] || {};
+    const box = document.createElement('div');
+    box.className = 'guide-cat';
+    const title = document.createElement('div');
+    title.className = 'guide-cat-title';
+    title.textContent = ((SEARCH_INDEX.facets || []).find(f => f.id === activeFacet) || {}).name || '';
+    box.appendChild(title);
+    const pills = document.createElement('div');
+    pills.className = 'guide-pills';
+    (facet.tags || []).forEach(tag => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'guide-pill' + (selectedSimpleTags.includes(tag) ? ' selected' : '');
+        btn.textContent = `${tag} (${countSimpleTag(tag)})`;
+        btn.setAttribute('aria-label', `篩選 ${tag}`);
+        btn.onclick = () => toggleSimpleTag(tag);
+        pills.appendChild(btn);
+    });
+    box.appendChild(pills);
+    legendDiv.appendChild(box);
 }
 
 function renderGuideCategories() {
@@ -2006,9 +2126,10 @@ function renderGuideCategories() {
         const pills = document.createElement('div');
         pills.className = 'guide-pills';
         (meta.tags || []).forEach(tag => {
+            const selected = asTagList(selectedGuideTags[cat]).includes(tag);
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'guide-pill' + (selectedGuideTags[cat] === tag ? ' selected' : '');
+            btn.className = 'guide-pill' + (selected ? ' selected' : '');
             btn.textContent = `${tag} (${countGuideTag(cat, tag)})`;
             btn.setAttribute('aria-label', `篩選 ${group.id} ${cat} ${tag}`);
             btn.onclick = () => toggleGuideTag(cat, tag);
@@ -2017,6 +2138,13 @@ function renderGuideCategories() {
         box.appendChild(pills);
         legendDiv.appendChild(box);
     });
+}
+
+function renderSearchManual() {
+    renderFacetTabs();
+    renderGuideTabs();
+    if (activeFacet === 'guide') renderGuideCategories();
+    else renderSimpleFacetPills();
 }
 
 function init() {
@@ -2040,8 +2168,7 @@ function init() {
         grid.appendChild(cell);
     }
 
-    renderGuideTabs();
-    renderGuideCategories();
+    renderSearchManual();
     applyGridFilter();
 
     syncLandscapeLegendLayout();
@@ -2091,13 +2218,16 @@ function init() {
 let hasInitialized = false;
 function startApp() {
     if (hasInitialized) return;
-    hasInitialized = true;
-    GUIDE_FILTER = buildGuideFilterFromOriginal(window.PSALM_DATA);
+    SEARCH_INDEX = window.SEARCH_INDEX || {};
+    GUIDE_FILTER = buildGuideFilterFromIndex(SEARCH_INDEX);
     if (!window.PSALM_APP_DATA) {
         alert('找不到 psalm-data-17.js，請確認 HTML 與 psalm-data-17.js 在同一資料夾。');
-    } else if (!window.PSALM_DATA || !GUIDE_FILTER.groups.length) {
+    } else if (!window.PSALM_DATA) {
         alert('找不到原始 psalm_data_complete.js，請確認資料檔在同一資料夾。');
+    } else if (!SEARCH_INDEX.facets || !GUIDE_FILTER.groups.length) {
+        alert('找不到 psalm-search-index.js，請確認搜尋手冊索引在同一資料夾。');
     }
+    hasInitialized = true;
     init();
 }
 
