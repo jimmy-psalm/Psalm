@@ -56,6 +56,15 @@
             filter: none;
             z-index: 1;
         }
+        .psalm-cell.flt-hit {
+            outline: 2.5px solid var(--acc-dk, #1e293b);
+            outline-offset: 1px;
+            box-shadow: 0 0 0 2px #fff;
+            opacity: 1;
+            filter: none;
+            z-index: 1;
+        }
+        .psalm-cell.flt-miss { opacity: 0.30; filter: grayscale(0.9); }
         .legend-group { margin-bottom: 6px; }
         .legend-group-title {
             appearance: none; -webkit-appearance: none;
@@ -598,6 +607,34 @@ const MAJOR_COLORS = {
     '王國': '#F1948A',
     '訓誨': '#BB8FCE'
 };
+/* ---- 方案A：主色盤（五向導）＋篩選中性色。圓點預設中性，選取篩選後依條件上色 ---- */
+const PSALM_NEUTRAL = '#e2e8f0';
+const GUIDE_COLORS = {
+  '文學': { hex: '#3b82f6', bg: '#dbeafe', deep: '#1e40af' },
+  '敬拜': { hex: '#f59e0b', bg: '#fef3c7', deep: '#92400e' },
+  '歷史': { hex: '#c2410c', bg: '#ffedd5', deep: '#7c2d12' },
+  '神學': { hex: '#8b5cf6', bg: '#ede9fe', deep: '#5b21b6' },
+  '牧養': { hex: '#10b981', bg: '#d1fae5', deep: '#065f46' }
+};
+const FACET_COLOR = {
+  genre:     { hex: '#3b82f6', bg: '#dbeafe', deep: '#1e40af' },  // 文體
+  mood:      { hex: '#0d9488', bg: '#ccfbf1', deep: '#115e59' },  // 處境
+  tradition: { hex: '#d97706', bg: '#fef3c7', deep: '#92400e' },  // 傳統
+  guide:     { hex: '#8b5cf6', bg: '#ede9fe', deep: '#5b21b6' }   // 綜合導讀(預設)
+};
+const _catGroup = {};
+(function buildCatGroupMap() { (GUIDE_FILTER.groups || []).forEach(g => (g.categories || []).forEach(c => { _catGroup[c] = g.id; })); })();
+function catGroupId(cat) { return _catGroup[cat] || '文學'; }
+function currentAccent() {
+    if (activeFacet === 'guide') {
+        const en = selectedGuideEntries();
+        if (!en.length) return null;
+        return GUIDE_COLORS[catGroupId(en[0][0])] || GUIDE_COLORS['文學'];
+    }
+    if (selectedSimpleTags.length) return FACET_COLOR[activeFacet] || FACET_COLOR.genre;
+    if (currentFilterTypeId != null || currentFilterMajor) return FACET_COLOR.guide;
+    return null;
+}
 const categories = {};
 function rebuildCategoriesFromClassification() {
     CLASSIFICATION = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.CLASSIFICATION) || CLASSIFICATION;
@@ -1172,11 +1209,21 @@ function updateGuideResultBar() {
 
 function applyGridFilter() {
     const filtering = hasActiveSearch() || currentFilterTypeId != null || currentFilterMajor;
+    const acc = currentAccent();
     document.querySelectorAll('.psalm-cell').forEach(cell => {
         const num = parseInt(cell.textContent, 10);
         const match = psalmMatchesFilter(num);
-        cell.classList.toggle('dimmed', filtering && !match);
-        cell.classList.toggle('lit', filtering && match);
+        cell.classList.remove('flt-hit', 'flt-miss', 'lit', 'dimmed');
+        if (!filtering) { cell.style.backgroundColor = PSALM_NEUTRAL; return; }
+        if (match) {
+            const a = acc || { bg: PSALM_NEUTRAL, deep: '#1e293b' };
+            cell.classList.add('flt-hit');
+            cell.style.backgroundColor = a.bg;
+            cell.style.setProperty('--acc-dk', a.deep);
+        } else {
+            cell.classList.add('flt-miss');
+            cell.style.backgroundColor = PSALM_NEUTRAL;
+        }
     });
     updateGuideResultBar();
     if (currentPsalm) {
@@ -2098,9 +2145,15 @@ function renderSimpleFacetPills() {
     (facet.tags || []).forEach(tag => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'guide-pill' + (selectedSimpleTags.includes(tag) ? ' selected' : '');
+        const selected = selectedSimpleTags.includes(tag);
+        btn.className = 'guide-pill' + (selected ? ' selected' : '');
         btn.textContent = `${tag} (${countSimpleTag(tag)})`;
         btn.setAttribute('aria-label', `篩選 ${tag}`);
+        if (selected) {
+            const a = FACET_COLOR[activeFacet] || FACET_COLOR.genre;
+            btn.style.background = a.bg;
+            btn.style.color = a.deep;
+        }
         btn.onclick = () => toggleSimpleTag(tag);
         pills.appendChild(btn);
     });
@@ -2132,6 +2185,11 @@ function renderGuideCategories() {
             btn.className = 'guide-pill' + (selected ? ' selected' : '');
             btn.textContent = `${tag} (${countGuideTag(cat, tag)})`;
             btn.setAttribute('aria-label', `篩選 ${group.id} ${cat} ${tag}`);
+            if (selected) {
+                const a = GUIDE_COLORS[group.id] || GUIDE_COLORS['文學'];
+                btn.style.background = a.bg;
+                btn.style.color = a.deep;
+            }
             btn.onclick = () => toggleGuideTag(cat, tag);
             pills.appendChild(btn);
         });
@@ -2158,12 +2216,10 @@ function init() {
     }
     generatePsalmMap(); calculateCounts();
     
-    // 建立詩篇矩陣（小圓形，顏色依五大類）
+    // 建立詩篇矩陣（圓點預設中性，選取篩選後由 applyGridFilter 依條件上色）
     const grid = document.getElementById('psalmGrid'); grid.innerHTML = '';
     for (let i = 1; i <= 150; i++) {
-        const cls = getPsalmClass(i);
-        const hex = MAJOR_COLORS[cls.major] || '#94a3b8';
-        const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'psalm-cell text-slate-700'; cell.style.backgroundColor = hex; cell.textContent = i; cell.setAttribute('aria-label', `選擇詩篇第 ${i} 篇`);
+        const cell = document.createElement('button'); cell.type = 'button'; cell.className = 'psalm-cell text-slate-700'; cell.style.backgroundColor = PSALM_NEUTRAL; cell.textContent = i; cell.setAttribute('aria-label', `選擇詩篇第 ${i} 篇`);
         cell.onclick = (e) => { e.stopPropagation(); showDetail(i, cell); };
         grid.appendChild(cell);
     }
