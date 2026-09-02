@@ -378,7 +378,58 @@
             opacity: 1;
             transform: translateY(0);
         }
-        @media (max-width: 1100px) {
+        /* ===== 播放列(panel4)新版視覺：待機/單次/循環/暫停 ===== */
+        .playrow { display: inline-flex; align-items: center; gap: 6px; }
+        .play-btn {
+            appearance: none; border: none; cursor: pointer;
+            box-sizing: border-box; display: inline-flex; align-items: center;
+            justify-content: center; gap: 3px; align-self: center;
+            position: relative;
+            border-radius: 9999px; width: 30px; height: 30px;
+            background: rgba(226,232,240,0.55); color: #94a3b8;   /* 待機空心淡 */
+            font-size: 12px; line-height: 1; transition: all 0.15s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .play-btn .loopmark { display: none; }
+        .play-btn.on { color: #fff; box-shadow: 0 0 0 3px #fff, 0 4px 10px rgba(0,0,0,0.18); transform: scale(1.06); }
+        .play-btn.on-pause { color: #fff; opacity: 0.75; }
+        .play-btn.on-loop { animation: pbtn-pulse 1.4s ease-in-out infinite; }
+        .play-btn.on-loop .loopmark { display: inline; font-style: normal; }
+        .play-btn[data-paused="1"] { animation: none; }
+        @keyframes pbtn-pulse { 0%,100%{ box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(0,0,0,0);} 50%{ box-shadow:0 0 0 3px #fff,0 0 0 7px currentColor;} }
+        /* 三色 */
+        .play-seg { --po:#16a34a; }
+        .play-whole { --po:#dc2626; }
+        .play-seq { --po:#6366f1; }
+        .play-btn.on,.play-btn.on-pause { background: var(--po); }
+        /* 暫停雙重豎槓（| |，分隔開，避免黏成方塊） */
+        .symbol-pause { display: none; font-weight:900; letter-spacing: 0; }
+        .symbol-pause::before { content: '|'; }
+        .symbol-pause::after { content: '|'; }
+        .play-btn.pausedstate .symbol-run { display: none; }
+        .play-btn.pausedstate .symbol-pause { display: inline-flex; gap: 1px; }
+        .play-btn.pausedstate .symbol-pause::before, .play-btn.pausedstate .symbol-pause::after { display: inline-block; }
+        /* 停鍵 */
+        .stop-btn {
+            appearance:none; border:none; cursor:pointer; box-sizing:border-box;
+            border-radius:9999px; width:30px; height:30px; line-height:1; font-size:12px;
+            background:#cbd5e1; color:#475569; transition:all .15s ease; -webkit-tap-highlight-color:transparent;
+        }
+        .stop-btn.on { background:#111827; color:#fff; }
+        /* 經文列播放狀態文字標題（取代 ♪ 膠囊） */
+        .play-status { font-weight:800; font-size:0.78rem; color:#334155; white-space:nowrap; }
+        .play-status .ps-play { color:#16a34a; }
+        .play-status .ps-pause { color:#b45309; }
+        /* 語速/音調 emoji 群 */
+        .tp-group { display:inline-flex; align-items:center; gap:2px; margin-right:4px; }
+        .tp-group .tp-label { font-size:11px; line-height:1; opacity:.85; }
+        .tp-btn { appearance:none;border:none;cursor:pointer;border-radius:8px;width:22px;height:22px;font-size:12px;line-height:1;background:#e8ebe6;color:#334155;transition:all .12s ease; display:inline-flex;align-items:center;justify-content:center;}
+        .tp-btn:active{ transform:scale(.9); }
+        .tp-val { font-size:9px; min-width:22px; text-align:center; color:#64748b; background:#fff; border-radius:6px; padding:1px 2px; border:1px solid #e2e8f0; }
+        @media (max-width:1100px){ .play-btn{width:26px;height:26px;font-size:11px;} .stop-btn{width:26px;height:26px;font-size:11px;} }
+        @media (max-width:500px){ .tp-val{display:none;} }
+        .play-btn { background: rgba(226,232,240,0.55); color: var(--po, #94a3b8); }
+        @media (max-width:1100px) {
             .panel4-actions { gap: 2px; }
             .copy-btn { font-size: 11.25px; padding: 3.75px 6.25px; }
             .arrow-btn { min-width: 22.5px; height: 22.5px; font-size: 11.25px; border-radius: 6px; }
@@ -422,10 +473,21 @@
     <div class="panel-group panel-group-bottom" id="panelGroupBottom">
         <!-- Panel 3 -->
         <div class="panel-card flex flex-col">
-            <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center">
-                <div class="flex items-center gap-2">
+            <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center flex-wrap gap-y-1">
+                <div class="flex items-center gap-2 flex-wrap">
                     <h3 class="font-bold text-gray-700 text-base tracking-wide">詩篇分析</h3>
-                    <button id="sequentialPlayBtn" type="button" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95" aria-label="按篩選結果順序朗讀">▶ 順序</button>
+                    <span class="tp-group">
+                        <span class="tp-label">⏱</span>
+                        <button id="rateDownBtn" type="button" class="tp-btn" aria-label="降低語速">▼</button>
+                        <span id="rateVal" class="tp-val">0.95x</span>
+                        <button id="rateUpBtn" type="button" class="tp-btn" aria-label="提高語速">▲</button>
+                    </span>
+                    <span class="tp-group">
+                        <span class="tp-label">🎵</span>
+                        <button id="pitchDownBtn" type="button" class="tp-btn" aria-label="降低音調">▼</button>
+                        <span id="pitchVal" class="tp-val">+0.00</span>
+                        <button id="pitchUpBtn" type="button" class="tp-btn" aria-label="提高音調">▲</button>
+                    </span>
                 </div>
                 <button id="jumpUpBtn3" type="button" class="panel-jump-btn" aria-label="切換到上方面板">▲</button>
                 <div class="flex items-center gap-1">
@@ -509,16 +571,12 @@
         <!-- Panel 4 -->
         <div class="panel4 bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
         <div id="panel4Header" class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex items-center gap-2 flex-shrink-0">
-            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文</span></div>
-            <span id="speechSettingHint" class="speech-setting-hint"></span>
-            <div class="panel4-actions ml-auto">
-                <button id="rateDownBtn" class="copy-btn arrow-btn arrow-rate shadow-sm transition-all active:scale-95" aria-label="降低朗讀速度">▼</button>
-                <button id="rateUpBtn" class="copy-btn arrow-btn arrow-rate shadow-sm transition-all active:scale-95" aria-label="提高朗讀速度">▲</button>
-                <button id="pitchDownBtn" class="copy-btn arrow-btn arrow-pitch shadow-sm transition-all active:scale-95" aria-label="降低朗讀音調">▼</button>
-                <button id="pitchUpBtn" class="copy-btn arrow-btn arrow-pitch shadow-sm transition-all active:scale-95" aria-label="提高朗讀音調">▲</button>
-                <button id="copySegmentBtn" aria-label="朗讀段落" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon tri-yellow">▶</span></button>
-                <button id="copyScriptureBtn" aria-label="朗讀全篇" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon tri-red">▶</span></button>
-                <button id="stopSpeakBtn" aria-label="停止朗讀" class="copy-btn bg-white/80 hover:bg-white shadow-sm transition-all rounded-lg px-2 py-1 text-xs font-medium text-gray-600 flex items-center gap-1 active:scale-95"><span class="speak-icon square-black">■</span></button>
+            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文</span><span id="playStatus" class="play-status">：詩篇第 <span id="playStatusNum">1</span> 篇</span></div>
+            <div class="playrow ml-auto">
+                <button id="copySegmentBtn" data-source="segment" aria-label="朗讀段落（長按切換循環）" class="play-btn play-seg" data-loop="0" data-paused="0"><span class="loopmark">⟳</span><span class="symbol-run">▶</span><span class="symbol-pause"></span></button>
+                <button id="copyScriptureBtn" data-source="whole" aria-label="朗讀全篇（長按切換循環）" class="play-btn play-whole" data-loop="0" data-paused="0"><span class="loopmark">⟳</span><span class="symbol-run">▶</span><span class="symbol-pause"></span></button>
+                <button id="sequentialPlayBtn" data-source="sequence" aria-label="按篩選結果依序播放（長按＝循環整串）" class="play-btn play-seq" data-loop="0" data-paused="0"><span class="loopmark">⟳</span><span class="symbol-run">▶▶</span><span class="symbol-pause"></span></button>
+                <button id="stopSpeakBtn" aria-label="完全停止" class="stop-btn">■</button>
             </div>
         </div>
         <div id="scripturePanel" class="flex-1 p-4 scripture-scroll">
@@ -1115,6 +1173,7 @@ function showDetail(n, el) {
     }
 
     currentPsalm = n;
+    updateTitleStatus();
 
     document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('active'));
     if (el) el.classList.add('active');
@@ -1129,18 +1188,21 @@ function showDetail(n, el) {
     };
     
     const cls = getPsalmClass(n);
-    const majorHex = MAJOR_COLORS[cls.major] || '#94a3b8';
-    
+    // 配色：依目前有效篩選條件(與下方圓點同套)，無篩選時用中性灰，不再顯示舊五大類色
+    const _acc = currentAccent();
+    const accentText = (_acc && (_acc.hex || _acc.deep)) || '#334155';
+    const accentBar  = (_acc && (_acc.deep || _acc.hex)) || '#cbd5e1';
+
     // 顯示/隱藏面板
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('contentState').classList.remove('hidden');
-    document.getElementById('topAccent').style.backgroundColor = majorHex;
+    document.getElementById('topAccent').style.backgroundColor = accentBar;
     document.getElementById('pTitleDisplay').textContent = `第 ${n} 篇`;
-    
+
     // 五大類 + 主分類（舊 type 僅作補充）
     const genreText = genreLabelsFor(n).join(' · ') || cls.primary;
     document.getElementById('pTypeLabel').textContent = `(文體：${genreText})`;
-    document.getElementById('pTypeLabel').style.color = majorHex;
+    document.getElementById('pTypeLabel').style.color = accentText;
     renderPsalmTagDots(n);
     renderGuideAnalysis(n);
     document.getElementById('pTheme').textContent = data.theme;
@@ -1644,12 +1706,14 @@ function adjustSpeechSetting(type, delta, btn) {
         const next = Math.max(0.6, Math.min(1.4, speechRate + delta));
         speechRate = Math.round(next * 100) / 100;
         showSpeechSettingHint(`速度 ${speechRate.toFixed(2)}x`, '#b91c1c');
+        refreshTpValues();
         return;
     }
     if (type === 'pitch') {
         const next = Math.max(0.7, Math.min(1.5, speechPitch + delta));
         speechPitch = Math.round(next * 100) / 100;
         showSpeechSettingHint(`音調 ${speechPitch.toFixed(2)}`, '#166534');
+        refreshTpValues();
     }
 }
 
@@ -1824,6 +1888,124 @@ function stopSpeaking() {
     cancelCurrentSpeech();
     // 停止順序播放
     sequentialPlayActive = false;
+}
+
+/* ===== 播放列新互動（經文列三顆+停）: 狀態/膠囊/視覺 ===== */
+const MODE_BTNID = { segment: 'copySegmentBtn', whole: 'copyScriptureBtn', sequence: 'sequentialPlayBtn' };
+let activeMode = null;   // 'segment'|'whole'|'sequence'
+let activeLoop = false;
+let activePaused = false;
+let seqWrapped = false;  // 順序循環
+
+function fillModeTone(b) {
+    if (!b) return;
+    b.classList.remove('play-seg', 'play-whole', 'play-seq');
+    if (b.dataset.source === 'whole') b.classList.add('play-whole');
+    else if (b.dataset.source === 'sequence') b.classList.add('play-seq');
+    else b.classList.add('play-seg');
+}
+function resetPlayVisuals() {
+    ['segment', 'whole', 'sequence'].forEach(k => {
+        const b = document.getElementById(MODE_BTNID[k]);
+        if (!b) return;
+        b.classList.remove('on', 'on-pause', 'on-loop', 'pausedstate');
+        b.removeAttribute('data-paused'); b.removeAttribute('data-loop');
+        b.setAttribute('aria-pressed', 'false');
+        fillModeTone(b);
+    });
+    const stop = document.getElementById('stopSpeakBtn'); if (stop) stop.classList.remove('on');
+    updateTitleStatus();
+}
+function updatePlayVisuals() {
+    ['segment', 'whole', 'sequence'].forEach(k => {
+        const b = document.getElementById(MODE_BTNID[k]); if (!b) return;
+        b.classList.remove('on', 'on-pause', 'on-loop', 'pausedstate');
+        b.removeAttribute('data-paused');
+        b.setAttribute('aria-pressed', 'false');
+    });
+    const stop = document.getElementById('stopSpeakBtn'); if (stop) stop.classList.add('on');
+    if (!activeMode) { resetPlayVisuals(); return; }
+    if (activeMode && !currentPsalm) {
+        const b0 = document.getElementById(MODE_BTNID[activeMode]);
+        if (b0) b0.classList.add('on');
+        return;
+    }
+    const b = document.getElementById(MODE_BTNID[activeMode]);
+    if (b) { b.classList.add('on'); b.setAttribute('aria-pressed', 'true'); }
+    if (activePaused) { b.classList.add('pausedstate'); b.setAttribute('data-paused', '1'); b.classList.add('on-pause'); }
+    else if (activeLoop && !activePaused) { b.classList.add('on-loop'); b.setAttribute('data-loop', '1'); }
+    updateTitleStatus();
+}
+function updateTitleStatus() {
+    const st = document.getElementById('playStatus');
+    if (!st) return;
+    if (!currentPsalm) { st.textContent = ''; return; }
+    let txt = '：詩篇第 ' + currentPsalm + ' 篇';
+    if (activeMode) txt += activePaused ? ' 已暫停' : ' 播放中';
+    st.textContent = txt;
+}
+function hasSpeech() { return !!window.speechSynthesis; }
+function stopPlaybackNow() {
+    if (!hasSpeech()) return;
+    window.speechSynthesis.cancel();
+    speechState.isSpeaking = false;
+    speechState.wasStopped = true;
+    speechState.wasFinished = false;
+    sequentialPlayActive = false;
+    activeMode = null; activeLoop = false; activePaused = false;
+    resetPlayVisuals();
+}
+function stopPlaybackKeepVisual() {
+    if (!hasSpeech()) return;
+    window.speechSynthesis.cancel();
+    speechState.isSpeaking = false; speechState.wasStopped = true; speechState.wasFinished = false;
+    sequentialPlayActive = false;
+}
+function startActiveGo(mode, loop) {
+    activeMode = mode; activeLoop = loop; activePaused = false;
+    updatePlayVisuals();
+    if (mode === 'segment') { loop ? readSelectedSegmentRepeat() : readSelectedSegment(); }
+    else if (mode === 'whole') { loop ? readWholePsalmRepeat() : readWholePsalm(); }
+    else { seqWrapped = loop; startSequentialPlay(); }
+}
+function refreshTpValues() {
+    const rv = document.getElementById('rateVal');
+    const pv = document.getElementById('pitchVal');
+    if (rv) rv.textContent = speechRate.toFixed(2) + 'x';
+    if (pv) pv.textContent = (speechPitch >= 1 ? '+' : '') + (speechPitch - 1).toFixed(2);
+}
+/* 短按一顆 ▶ */
+function onPlayTap(mode) {
+    if (!hasSpeech()) return;
+    if (activeMode === mode && (window.speechSynthesis.paused || activePaused)) {
+        // 續播
+        try { window.speechSynthesis.resume(); } catch (e) {}
+        activePaused = false; updatePlayVisuals(); return;
+    }
+    if (activeMode === mode) {
+        // 播放中 → 暫停
+        try { if (window.speechSynthesis.speaking) window.speechSynthesis.pause(); } catch (e) {}
+        activePaused = true; updatePlayVisuals(); return;
+    }
+    stopPlaybackKeepVisual();
+    startActiveGo(mode, false);
+}
+/* 長按一顆 ▶：切換 單次 ⇄ 循環 */
+function onPlayLong(mode) {
+    if (!hasSpeech()) return;
+    if (activeMode === mode && activeLoop && !activePaused) {
+        // 由循環切回單次
+        stopPlaybackKeepVisual();
+        startActiveGo(mode, false);
+        return;
+    }
+    stopPlaybackKeepVisual();
+    startActiveGo(mode, true);
+}
+/* ■ 完全停止 */
+function onStopTap() {
+    stopPlaybackNow();
+    updatePlayVisuals();
 }
 
 
@@ -2057,8 +2239,11 @@ function onSequentialPsalmEnd() {
     } else if (currentIdx === -1 && list.length > 0) {
         // 當前詩篇不在列表中（篩選改變了），跳到列表第一首
         nextPsalm = list[0];
+    } else if (currentIdx + 1 >= list.length && seqWrapped && list.length > 0) {
+        // 順序「循環」：已到最後一首 → 回到清單第一首
+        nextPsalm = list[0];
     }
-    // 如果 currentIdx 是最後一首，nextPsalm 保持 null，順序播放結束
+    // 如果 currentIdx 是最後一首且非循環，nextPsalm 保持 null，順序播放結束
     
     if (nextPsalm !== null) {
         // 跳到下一首並朗讀
@@ -2251,14 +2436,16 @@ function init() {
         } 
     });
     
-    bindShortAndLongPressSpeak(document.getElementById('copyScriptureBtn'), readWholePsalm, readWholePsalmRepeat);
-    bindShortAndLongPressSpeak(document.getElementById('copySegmentBtn'), readSelectedSegment, readSelectedSegmentRepeat);
-    document.getElementById('stopSpeakBtn').addEventListener('click', stopSpeaking);
+    bindShortAndLongPressSpeak(document.getElementById('copyScriptureBtn'), () => onPlayTap('whole'), () => onPlayLong('whole'));
+    bindShortAndLongPressSpeak(document.getElementById('copySegmentBtn'), () => onPlayTap('segment'), () => onPlayLong('segment'));
+    bindShortAndLongPressSpeak(document.getElementById('sequentialPlayBtn'), () => onPlayTap('sequence'), () => onPlayLong('sequence'));
+    document.getElementById('stopSpeakBtn').addEventListener('click', onStopTap);
     document.getElementById('rateDownBtn').addEventListener('click', (e) => adjustSpeechSetting('rate', -0.05, e.currentTarget));
     document.getElementById('rateUpBtn').addEventListener('click', (e) => adjustSpeechSetting('rate', 0.05, e.currentTarget));
-    document.getElementById('pitchDownBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', -0.05, e.currentTarget));
-    document.getElementById('pitchUpBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', 0.05, e.currentTarget));
-    document.getElementById('sequentialPlayBtn').addEventListener('click', startSequentialPlay);
+    document.getElementById('pitchDownBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', -0.2, e.currentTarget));
+    document.getElementById('pitchUpBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', 0.2, e.currentTarget));
+    refreshTpValues();
+    resetPlayVisuals();
     bindRepeatPressBtn(document.getElementById('prevPsalmBtn'), () => { selectRelativePsalm(-1); });
     bindRepeatPressBtn(document.getElementById('nextPsalmBtn'), () => { selectRelativePsalm(1); });
 
