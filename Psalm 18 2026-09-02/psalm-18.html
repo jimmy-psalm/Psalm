@@ -420,6 +420,15 @@
         .play-status { font-weight:800; font-size:0.78rem; color:#334155; white-space:nowrap; }
         .play-status .ps-play { color:#16a34a; }
         .play-status .ps-pause { color:#b45309; }
+        /* 詩篇切換 ▲▼（放在經文列播放群內） */
+        .nav-psal-btn {
+            appearance:none; border:none; cursor:pointer; box-sizing:border-box;
+            width:24px; height:30px; border-radius:9999px; background:rgba(226,232,240,0.55);
+            color:#475569; font-size:12px; line-height:1; transition:all .12s ease; display:inline-flex; align-items:center; justify-content:center;
+            -webkit-tap-highlight-color:transparent;
+        }
+        .nav-psal-btn:active { transform:scale(.9); background:#cbd5e1; }
+        .playrow-sep { width:1px; height:22px; background:#cbd5e1; margin:0 2px; }
         /* 語速/音調 emoji 群 */
         .tp-group { display:inline-flex; align-items:center; gap:2px; margin-right:4px; }
         .tp-group .tp-label { font-size:11px; line-height:1; opacity:.85; }
@@ -490,10 +499,6 @@
                     </span>
                 </div>
                 <button id="jumpUpBtn3" type="button" class="panel-jump-btn" aria-label="切換到上方面板">▲</button>
-                <div class="flex items-center gap-1">
-                    <button id="prevPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">< 上一篇</button>
-                    <button id="nextPsalmBtn" type="button" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg px-2 py-1 transition active:scale-95">下一篇 ></button>
-                </div>
             </div>
 
             <div id="emptyState" class="flex-1 flex flex-col items-center justify-center p-3 text-center min-h-[90px]">
@@ -570,9 +575,12 @@
 
         <!-- Panel 4 -->
         <div class="panel4 bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
-        <div id="panel4Header" class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex items-center gap-2 flex-shrink-0">
+        <div id="panel4Header" class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex items-center gap-2 flex-wrap flex-shrink-0">
             <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文</span><span id="playStatus" class="play-status">：詩篇第 <span id="playStatusNum">1</span> 篇</span></div>
             <div class="playrow ml-auto">
+                <button id="prevPsalmBtn" type="button" class="nav-psal-btn" aria-label="上一首詩篇">▲</button>
+                <button id="nextPsalmBtn" type="button" class="nav-psal-btn" aria-label="下一首詩篇">▼</button>
+                <span class="playrow-sep"></span>
                 <button id="copySegmentBtn" data-source="segment" aria-label="朗讀段落（長按切換循環）" class="play-btn play-seg" data-loop="0" data-paused="0"><span class="loopmark">⟳</span><span class="symbol-run">▶</span><span class="symbol-pause"></span></button>
                 <button id="copyScriptureBtn" data-source="whole" aria-label="朗讀全篇（長按切換循環）" class="play-btn play-whole" data-loop="0" data-paused="0"><span class="loopmark">⟳</span><span class="symbol-run">▶</span><span class="symbol-pause"></span></button>
                 <button id="sequentialPlayBtn" data-source="sequence" aria-label="按篩選結果依序播放（長按＝循環整串）" class="play-btn play-seq" data-loop="0" data-paused="0"><span class="loopmark">⟳</span><span class="symbol-run">▶▶</span><span class="symbol-pause"></span></button>
@@ -1939,10 +1947,8 @@ function updatePlayVisuals() {
 function updateTitleStatus() {
     const st = document.getElementById('playStatus');
     if (!st) return;
-    if (!currentPsalm) { st.textContent = ''; return; }
-    let txt = '：詩篇第 ' + currentPsalm + ' 篇';
-    if (activeMode) txt += activePaused ? ' 已暫停' : ' 播放中';
-    st.textContent = txt;
+    st.textContent = currentPsalm ? ('：詩篇第 ' + currentPsalm + ' 篇') : '';
+    // 只顯示篇號，不附加「播放中/已暫停」；播放狀態由按鈕視覺呈現
 }
 function hasSpeech() { return !!window.speechSynthesis; }
 function stopPlaybackNow() {
@@ -2473,6 +2479,43 @@ function startApp() {
 document.addEventListener('psalm-data-ready', startApp, { once: true });
 document.addEventListener('DOMContentLoaded', startApp, { once: true });
 window.addEventListener('pageshow', startApp);
+﻿function psalmNavCells(cells){
+ var arr=Array.prototype.slice.call(cells||[]);
+ var hit=arr.filter(function(c){return c.classList.contains("flt-hit");});
+ var miss=arr.some(function(c){return c.classList.contains("flt-miss");});
+ return (hit.length||miss)?hit:arr;
+}
+function moveToPsalm(newPsalm){
+ if(newPsalm<1||newPsalm>150){return;}
+ var hasFiltered=document.querySelectorAll(".psalm-cell.flt-hit").length>0||document.querySelectorAll(".psalm-cell.flt-miss").length>0;
+ if(hasFiltered&&!psalmMatchesFilter(newPsalm)){return;}
+ var cells=document.querySelectorAll(".psalm-cell");var targetCell=null;
+ cells.forEach(function(cell){if(parseInt(cell.textContent)===newPsalm){targetCell=cell;}});
+ if(!targetCell){return;}
+ targetCell.click();targetCell.classList.add("active");
+ if(shouldAutoScrollMatrix()){try{targetCell.scrollIntoView({behavior:"smooth",block:"nearest",inline:"nearest"});}catch(err){targetCell.scrollIntoView(true);}}
+}
+function selectRelativePsalm(delta){
+ if(!Number.isInteger(delta)||delta===0){return;}
+ var cells=Array.prototype.slice.call(document.querySelectorAll(".psalm-cell"));
+ var scope=psalmNavCells(cells);if(!scope.length){return;}
+ var numbers=scope.map(function(cell){return parseInt(cell.textContent);}).filter(function(n){return Number.isFinite(n);});
+ if(!numbers.length){return;}
+ var base=(currentPsalm&&numbers.indexOf(currentPsalm)>=0)?currentPsalm:numbers[0];
+ var ci=numbers.indexOf(base);var ni=(ci+delta+numbers.length)%numbers.length;var next=numbers[ni];
+ var targetCell=null;cells.forEach(function(cell){if(parseInt(cell.textContent)===next){targetCell=cell;}});
+ if(!targetCell){return;}showDetail(next,targetCell);
+}
+function handleTab(e){
+ if(e.key!=="Tab"){return;}e.preventDefault();
+ var cells=Array.prototype.slice.call(document.querySelectorAll(".psalm-cell"));
+ var visible=psalmNavCells(cells);if(!visible.length){return;}
+ if(!currentPsalm){moveToPsalm(parseInt(visible[0].textContent));return;}
+ var idx=-1;for(var i=0;i<visible.length;i++){if(parseInt(visible[i].textContent)===currentPsalm){idx=i;break;}}
+ if(idx===-1){idx=0;}
+ var ni=(idx+1)%visible.length;moveToPsalm(parseInt(visible[ni].textContent));
+}
+
 </script>
 </body>
 </html>
