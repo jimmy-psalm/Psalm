@@ -433,7 +433,8 @@
         .tp-group { display:inline-flex; align-items:center; gap:2px; margin-right:4px; }
         .tp-group .tp-label { font-size:11px; line-height:1; opacity:.85; }
         .tp-btn { appearance:none;border:none;cursor:pointer;border-radius:8px;width:22px;height:22px;font-size:12px;line-height:1;background:#e8ebe6;color:#334155;transition:all .12s ease; display:inline-flex;align-items:center;justify-content:center;}
-        .tp-btn:active{ transform:scale(.9); }
+        .tp-btn:active{ background:#334155; color:#fff; transform:scale(.9); }
+        .tp-btn.pressed{ background:#334155; color:#fff; transform:scale(.9); }
         .tp-val { font-size:9px; min-width:22px; text-align:center; color:#64748b; background:#fff; border-radius:6px; padding:1px 2px; border:1px solid #e2e8f0; }
         @media (max-width:1100px){ .play-btn{width:26px;height:26px;font-size:11px;} .stop-btn{width:26px;height:26px;font-size:11px;} }
         @media (max-width:520px){
@@ -2456,6 +2457,16 @@ function init() {
     document.getElementById('rateUpBtn').addEventListener('click', (e) => adjustSpeechSetting('rate', 0.05, e.currentTarget));
     document.getElementById('pitchDownBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', -0.2, e.currentTarget));
     document.getElementById('pitchUpBtn').addEventListener('click', (e) => adjustSpeechSetting('pitch', 0.2, e.currentTarget));
+    // ▲▼ 語速/音調按鍵：按下瞬間變色回饋（pointer 事件，iPhone 觸控也可靠）
+    document.querySelectorAll('#panel3Header .tp-btn').forEach(function(btn){
+        var t;
+        var add=function(){ clearTimeout(t); btn.classList.add('pressed'); };
+        var rm=function(){ clearTimeout(t); t=setTimeout(function(){ btn.classList.remove('pressed'); }, 180); };
+        btn.addEventListener('pointerdown', add);
+        btn.addEventListener('pointerup', rm);
+        btn.addEventListener('pointercancel', rm);
+        btn.addEventListener('pointerleave', rm);
+    });
     refreshTpValues();
     resetPlayVisuals();
     bindRepeatPressBtn(document.getElementById('prevPsalmBtn'), () => { selectRelativePsalm(-1); });
