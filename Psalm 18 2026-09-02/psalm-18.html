@@ -643,7 +643,7 @@
         <!-- Panel 4 -->
         <div class="panel4 bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden flex flex-col">
         <div id="panel4Header" class="bg-gray-50/80 px-3 py-2 border-b-2 border-slate-300 flex items-center gap-2 flex-wrap flex-shrink-0">
-            <div class="flex items-center gap-2"><span class="text-base font-bold text-gray-700">經文</span><span id="playStatus" class="play-status">：詩篇第 <span id="playStatusNum">1</span> 篇</span></div>
+            <div class="flex items-center"><span id="playStatus" class="play-status">詩篇第 <span id="playStatusNum">1</span> 篇</span><span class="text-base font-bold text-gray-700">經文</span></div>
             <div class="playrow ml-auto">
                 <button id="prevPsalmBtn" type="button" class="nav-psal-btn" aria-label="上一首詩篇">▲</button>
                 <button id="nextPsalmBtn" type="button" class="nav-psal-btn" aria-label="下一首詩篇">▼</button>
@@ -2087,7 +2087,7 @@ function resetPlayRowState() {
 function updateTitleStatus() {
     const st = document.getElementById('playStatus');
     if (!st) return;
-    st.textContent = currentPsalm ? ('：詩篇第 ' + currentPsalm + ' 篇') : '';
+    st.textContent = currentPsalm ? ('詩篇第 ' + currentPsalm + ' 篇') : '';
     // 只顯示篇號，不附加「播放中/已暫停」；播放狀態由按鈕視覺呈現
 }
 function hasSpeech() { return !!window.speechSynthesis; }
