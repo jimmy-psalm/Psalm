@@ -1279,7 +1279,6 @@ function showDetail(n, el) {
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('contentState').classList.remove('hidden');
     document.getElementById('topAccent').style.backgroundColor = accentBar;
-    document.getElementById('panel3Title').textContent = `詩篇第 ${n} 篇分析`;
 
     // 五大類 + 主分類（舊 type 僅作補充）→ 僅文體標籤，字級小於標題
     const genreText = genreLabelsFor(n).join(' · ') || cls.primary;
