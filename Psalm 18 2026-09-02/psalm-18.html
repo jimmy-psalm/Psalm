@@ -1648,9 +1648,12 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
         clearSpeakingButtonState();
         speechState.isSpeaking = false;
         speechState.wasFinished = true;
-        // 順序播放中：朗讀完成後檢查是否需要跳到下一首詩篇
+        // 順序播放中：完成後檢查是否需要跳到下一首詩篇
         if (sequentialPlayActive) {
             onSequentialPsalmEnd();
+        } else {
+            // 一般單次播完（非按停止）：重設播放列為預設狀態
+            resetPlayRowState();
         }
     };
 
@@ -1688,6 +1691,9 @@ function speakSequentialChunks(chunks, btn, repeatCycle = false) {
                 // 順序播放中：所有段落朗讀完成後跳到下一首詩篇
                 if (sequentialPlayActive) {
                     onSequentialPsalmEnd();
+                } else {
+                    // 單次全篇播完（非按停止）：重設播放列為預設狀態
+                    resetPlayRowState();
                 }
             }
             return;
@@ -1951,6 +1957,12 @@ function updatePlayVisuals() {
     else if (activeLoop && !activePaused) { b.classList.add('on-loop'); b.setAttribute('data-loop', '1'); }
     updateTitleStatus();
 }
+function resetPlayRowState() {
+    // 正常播放完畢時：重設播放列（三個播放鍵 + 停止鍵）回到預設，
+    // 等同按「■ 停止」後的視覺結果，但不取消任何語音。
+    activeMode = null; activeLoop = false; activePaused = false; seqWrapped = false;
+    resetPlayVisuals();
+}
 function updateTitleStatus() {
     const st = document.getElementById('playStatus');
     if (!st) return;
@@ -2164,6 +2176,9 @@ function speakCantoneseWithCallback(text, btn, successMsg) {
         // 檢查順序播放是否仍活躍
         if (sequentialPlayActive) {
             onSequentialPsalmEnd();
+        } else {
+            // 順序已停（防護）：重設播放列為預設狀態
+            resetPlayRowState();
         }
     };
     window.speechSynthesis.speak(utter);
@@ -2199,6 +2214,9 @@ function speakSequentialChunksWithCallback(chunks, btn, repeatCycle = false) {
             // 所有段落朗讀完成，檢查順序播放
             if (sequentialPlayActive) {
                 onSequentialPsalmEnd();
+            } else {
+                // 順序已停（防護）：重設播放列為預設狀態
+                resetPlayRowState();
             }
             return;
         }
@@ -2239,6 +2257,7 @@ function onSequentialPsalmEnd() {
     
     if (!list.length) {
         sequentialPlayActive = false;
+        resetPlayRowState();
         return;
     }
     
@@ -2280,10 +2299,12 @@ function onSequentialPsalmEnd() {
             }, 100);
         } else {
             sequentialPlayActive = false;
+            resetPlayRowState();
         }
     } else {
         // 已到最後一首，結束順序播放
         sequentialPlayActive = false;
+        resetPlayRowState();
         showCopyFeedback('✅ 順序朗讀完成', document.getElementById('sequentialPlayBtn'));
     }
 }
