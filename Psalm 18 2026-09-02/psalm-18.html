@@ -114,14 +114,14 @@
         .guide-tabs.is-hidden { display: none; }
         .guide-tab.active { background: #166534; color: #fff; }
         .guide-result {
-            display: flex; justify-content: space-between; align-items: center; gap: 8px;
-            background: #f3f4ee; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center; gap: 6px;
+            background: #f3f4ee; border-radius: 8px; padding: 3px 8px; margin-bottom: 6px;
         }
-        .guide-result-text { font-size: 0.82rem; font-weight: 700; color: #334155; }
+        .guide-result-text { font-size: 0.74rem; font-weight: 700; color: #334155; }
         .guide-clear {
             appearance: none; -webkit-appearance: none; cursor: pointer;
             border: 1px solid #ef4444; color: #dc2626; background: #fff;
-            border-radius: 8px; padding: 4px 10px; font-size: 0.78rem; font-weight: 800;
+            border-radius: 6px; padding: 2px 8px; font-size: 0.72rem; font-weight: 800;
         }
         .guide-clear[disabled] { opacity: 0.35; cursor: default; }
         .guide-cat { background: #f7f4ee; border-radius: 12px; padding: 8px 10px 10px; margin-bottom: 8px; }
@@ -508,9 +508,8 @@
                 <button id="jumpDownBtn1" type="button" class="panel-jump-btn" aria-label="切換到下方面板">▼</button>
             </div>
             <div id="facetTabs" class="facet-tabs"></div>
-            <p id="facetHint" class="facet-hint"></p>
             <div id="guideTabs" class="guide-tabs is-hidden"></div>
-            <div class="guide-result">
+            <div id="guideResultBar" class="guide-result hidden">
                 <span id="guideResultText" class="guide-result-text">符合: 150 首</span>
                 <button id="resetBtn" type="button" class="guide-clear" disabled>清除</button>
             </div>
@@ -1311,6 +1310,9 @@ function currentSelectedLabels() {
 function updateGuideResultBar() {
     const selected = currentSelectedLabels();
     const matches = hasActiveSearch() ? countSearchMatches() : 150;
+    const activeSearch = hasActiveSearch() || currentFilterTypeId != null || currentFilterMajor;
+    const bar = document.getElementById('guideResultBar');
+    if (bar) bar.classList.toggle('hidden', !activeSearch);
     const text = document.getElementById('guideResultText');
     if (text) {
         text.textContent = selected.length
@@ -2399,7 +2401,6 @@ function onSequentialPsalmEnd() {
 
 function renderFacetTabs() {
     const tabs = document.getElementById('facetTabs');
-    const hint = document.getElementById('facetHint');
     if (!tabs) return;
     tabs.innerHTML = '';
     (SEARCH_INDEX.facets || []).forEach(facet => {
@@ -2411,10 +2412,6 @@ function renderFacetTabs() {
         btn.onclick = () => setActiveFacet(facet.id);
         tabs.appendChild(btn);
     });
-    if (hint) {
-        const current = (SEARCH_INDEX.facets || []).find(f => f.id === activeFacet);
-        hint.textContent = current ? current.hint : '';
-    }
 }
 
 function renderGuideTabs() {
