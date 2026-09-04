@@ -503,7 +503,6 @@
             <div id="panel1Header" class="flex items-center justify-between border-b-2 border-slate-300 pb-1 mb-1.5">
                 <div>
                     <h3 class="font-extrabold text-gray-800 text-base">📖 搜尋手冊</h3>
-                    <p class="text-[11px] text-slate-500 font-semibold mt-0.5">先選找法，再選標籤；亮起的圓點可點來看經文</p>
                 </div>
                 <button id="jumpDownBtn1" type="button" class="panel-jump-btn" aria-label="切換到下方面板">▼</button>
             </div>
@@ -520,7 +519,6 @@
         <div class="panel-card p-3 flex flex-col">
             <div id="panel2Header" class="flex justify-between items-center mb-1.5 pb-1 border-b-2 border-slate-300">
                 <div><h3 class="font-extrabold text-gray-800 text-base">詩篇全景</h3></div>
-                <span id="filterTypeDisplay" class="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full hidden"></span>
                 <div class="text-[10px] text-gray-400">亮起的圓點可點選</div>
             </div>
             <div class="matrix-scroll"><div id="psalmGrid" class="psalm-grid-15"></div></div>
@@ -1321,16 +1319,6 @@ function updateGuideResultBar() {
     }
     const resetBtn = document.getElementById('resetBtn');
     if (resetBtn) resetBtn.disabled = !hasActiveSearch() && !currentFilterTypeId && !currentFilterMajor;
-    const display = document.getElementById('filterTypeDisplay');
-    if (display) {
-        if (selected.length) {
-            display.textContent = selected.join(' + ');
-            display.classList.remove('hidden');
-        } else {
-            display.textContent = '';
-            display.classList.add('hidden');
-        }
-    }
 }
 
 function applyGridFilter() {
