@@ -65,6 +65,27 @@
             z-index: 1;
         }
         .psalm-cell.flt-miss { opacity: 0.30; filter: grayscale(0.9); }
+        /* 選取狀態：讓「剛點選/正在播放的詩篇」一目了然 */
+        .psalm-cell.sel-clear {
+            background: #fff !important;
+            color: #111827 !important;
+            outline: 3px solid #111827;
+            outline-offset: 1px;
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.95);
+            transform: scale(1.06);
+            opacity: 1;
+            filter: none;
+            z-index: 2;
+        }
+        .psalm-cell.sel-glow {
+            outline: 3px solid #111827;
+            outline-offset: 1px;
+            box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(255,255,255,0.4), 0 0 12px rgba(250, 204, 21, 0.9);
+            transform: scale(1.08);
+            opacity: 1;
+            filter: none;
+            z-index: 2;
+        }
         .legend-group { margin-bottom: 6px; }
         .legend-group-title {
             appearance: none; -webkit-appearance: none;
@@ -1238,6 +1259,7 @@ function showDetail(n, el) {
 
     document.querySelectorAll('.psalm-cell').forEach(c => c.classList.remove('active'));
     if (el) el.classList.add('active');
+    refreshPsalmSelectionStyle();
     
     // 原有 OFFLINE_DB 資料
     const data = OFFLINE_DB[n] || { 
@@ -1323,6 +1345,25 @@ function updateGuideResultBar() {
     if (resetBtn) resetBtn.disabled = !hasActiveSearch() && !currentFilterTypeId && !currentFilterMajor;
 }
 
+// 讓「選取中的圓點」依環境顯示清楚：無搜尋→白底黑字黑框；有搜尋且命中→發光高亮
+function refreshPsalmSelectionStyle() {
+    const cells = document.querySelectorAll('.psalm-cell');
+    let el = null;
+    cells.forEach(c => {
+        c.classList.remove('sel-clear', 'sel-glow');
+        if (currentPsalm != null && parseInt(c.textContent, 10) === currentPsalm) el = c;
+    });
+    if (!el) return;
+    const filtering = hasActiveSearch() || currentFilterTypeId != null || currentFilterMajor;
+    if (!filtering) {
+        el.classList.add('sel-clear');
+    } else if (el.classList.contains('flt-hit')) {
+        el.classList.add('sel-glow');
+    } else {
+        el.classList.add('sel-clear');
+    }
+}
+
 function applyGridFilter() {
     const filtering = hasActiveSearch() || currentFilterTypeId != null || currentFilterMajor;
     const acc = currentAccent();
@@ -1341,6 +1382,7 @@ function applyGridFilter() {
             cell.style.backgroundColor = PSALM_NEUTRAL;
         }
     });
+    refreshPsalmSelectionStyle();
     updateGuideResultBar();
     if (currentPsalm) {
         renderGuideAnalysis(currentPsalm);
