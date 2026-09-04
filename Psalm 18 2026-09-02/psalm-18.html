@@ -655,6 +655,68 @@ let sequentialPlayActive = false;  // 是否正在順序播放
 let currentFilterTypeId = null;    // 舊 17類 id（保留給分析面板小圓點）
 let currentFilterMajor = null;
 
+/* ===== 背景靜音循環（讓 iOS 在螢幕關閉／切換其他 App 後仍繼續朗讀） =====
+   原理：iOS 不會暫停「正在播放音訊」的網頁。因此我們用一個隱藏、音量極低、
+   不斷循環播放的「真的空白」WAV，讓 iPhone 以為我們正在播放 MP3／音樂，
+   瀏覽器就不會在背景被凍結，SpeechSynthesis 因此能持續朗讀經文。
+   此處以 data URI 內嵌（僅 ~1.1KB），不需外部檔案、可離線使用。 */
+const SILENT_AUDIO_DATA_URI = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+let _silentAudio = null;
+
+function getSilentAudio() {
+    if (_silentAudio) return _silentAudio;
+    const a = new Audio(SILENT_AUDIO_DATA_URI);
+    a.loop = true;
+    a.preload = 'auto';
+    a.volume = 0.01; // 極低音量（內容為真空白，聽不到任何聲音）
+    a.setAttribute('playsinline', '');
+    a.setAttribute('webkit-playsinline', '');
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    _silentAudio = a;
+    return a;
+}
+
+function setMediaSessionPlaying(playing) {
+    try {
+        if (!navigator.mediaSession) return;
+        if (playing) {
+            if (navigator.mediaSession.metadata === null && typeof MediaMetadata === 'function') {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: '朗讀詩篇',
+                    artist: '背景朗讀',
+                    album: '詩篇全景'
+                });
+            }
+            navigator.mediaSession.playbackState = 'playing';
+        } else {
+            navigator.mediaSession.playbackState = 'none';
+        }
+    } catch (e) {}
+}
+
+// 在「使用者手勢」內開始播放，讓 iOS 進入「播放音訊」狀態
+function startSilentLoop() {
+    try {
+        const a = getSilentAudio();
+        if (a.paused) {
+            const p = a.play();
+            if (p && typeof p.catch === 'function') p.catch(() => {});
+        }
+        setMediaSessionPlaying(true);
+    } catch (e) {}
+}
+
+function stopSilentLoop() {
+    try {
+        if (_silentAudio && !_silentAudio.paused) {
+            _silentAudio.pause();
+            _silentAudio.currentTime = 0;
+        }
+        setMediaSessionPlaying(false);
+    } catch (e) {}
+}
+
 function asTagList(value) {
     if (Array.isArray(value)) return value.filter(Boolean);
     return value ? [value] : [];
@@ -1638,6 +1700,7 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
         clearSpeakingButtonState();
         speechState.isSpeaking = false;
         speechState.wasStopped = true;
+        stopSilentLoop();
     };
     utter.onend = () => {
         if (mySession !== speechSessionId) return;
@@ -1648,12 +1711,14 @@ function speakCantonese(text, btn, successMsg, repeat = false) {
         clearSpeakingButtonState();
         speechState.isSpeaking = false;
         speechState.wasFinished = true;
+        if (!sequentialPlayActive) stopSilentLoop();
         // 順序播放中：朗讀完成後檢查是否需要跳到下一首詩篇
         if (sequentialPlayActive) {
             onSequentialPsalmEnd();
         }
     };
 
+    startSilentLoop();
     window.speechSynthesis.speak(utter);
 }
 
@@ -1685,6 +1750,7 @@ function speakSequentialChunks(chunks, btn, repeatCycle = false) {
                 clearSpeakingButtonState();
                 speechState.isSpeaking = false;
                 speechState.wasFinished = true;
+                if (!sequentialPlayActive) stopSilentLoop();
                 // 順序播放中：所有段落朗讀完成後跳到下一首詩篇
                 if (sequentialPlayActive) {
                     onSequentialPsalmEnd();
@@ -1705,11 +1771,13 @@ function speakSequentialChunks(chunks, btn, repeatCycle = false) {
             clearSpeakingButtonState();
             speechState.isSpeaking = false;
             speechState.wasStopped = true;
+            stopSilentLoop();
         };
         utter.onend = () => {
             if (mySession !== speechSessionId) return;
             speakAt(idx + 1);
         };
+        startSilentLoop();
         window.speechSynthesis.speak(utter);
     };
 
@@ -1897,6 +1965,9 @@ function cancelCurrentSpeech() {
         speechState.wasStopped = true;
         speechState.isSpeaking = false;
     }
+    // 順序播放的自動換篇會經由此函數取消朗讀；此時要保留背景靜音循環，
+    // 因為 setTimeout 中無法再次取得使用者手勢來重新 play()。
+    if (!sequentialPlayActive) stopSilentLoop();
 }
 
 function stopSpeaking() {
@@ -1966,6 +2037,7 @@ function stopPlaybackNow() {
     speechState.wasFinished = false;
     sequentialPlayActive = false;
     activeMode = null; activeLoop = false; activePaused = false;
+    stopSilentLoop();
     resetPlayVisuals();
 }
 function stopPlaybackKeepVisual() {
@@ -1973,6 +2045,7 @@ function stopPlaybackKeepVisual() {
     window.speechSynthesis.cancel();
     speechState.isSpeaking = false; speechState.wasStopped = true; speechState.wasFinished = false;
     sequentialPlayActive = false;
+    stopSilentLoop();
 }
 function startActiveGo(mode, loop) {
     activeMode = mode; activeLoop = loop; activePaused = false;
@@ -1993,6 +2066,7 @@ function onPlayTap(mode) {
     if (activeMode === mode && (window.speechSynthesis.paused || activePaused)) {
         // 續播
         try { window.speechSynthesis.resume(); } catch (e) {}
+        startSilentLoop();
         activePaused = false; updatePlayVisuals(); return;
     }
     if (activeMode === mode) {
@@ -2155,17 +2229,20 @@ function speakCantoneseWithCallback(text, btn, successMsg) {
         speechState.isSpeaking = false;
         speechState.wasStopped = true;
         sequentialPlayActive = false;
+        stopSilentLoop();
     };
     utter.onend = () => {
         if (mySession !== speechSessionId) return;
         clearSpeakingButtonState();
         speechState.isSpeaking = false;
         speechState.wasFinished = true;
+        if (!sequentialPlayActive) stopSilentLoop();
         // 檢查順序播放是否仍活躍
         if (sequentialPlayActive) {
             onSequentialPsalmEnd();
         }
     };
+    startSilentLoop();
     window.speechSynthesis.speak(utter);
 }
 
@@ -2196,6 +2273,7 @@ function speakSequentialChunksWithCallback(chunks, btn, repeatCycle = false) {
             clearSpeakingButtonState();
             speechState.isSpeaking = false;
             speechState.wasFinished = true;
+            if (!sequentialPlayActive) stopSilentLoop();
             // 所有段落朗讀完成，檢查順序播放
             if (sequentialPlayActive) {
                 onSequentialPsalmEnd();
@@ -2215,11 +2293,13 @@ function speakSequentialChunksWithCallback(chunks, btn, repeatCycle = false) {
             speechState.isSpeaking = false;
             speechState.wasStopped = true;
             sequentialPlayActive = false;
+            stopSilentLoop();
         };
         utter.onend = () => {
             if (mySession !== speechSessionId) return;
             speakAt(idx + 1);
         };
+        startSilentLoop();
         window.speechSynthesis.speak(utter);
     };
 
@@ -2239,6 +2319,7 @@ function onSequentialPsalmEnd() {
     
     if (!list.length) {
         sequentialPlayActive = false;
+        stopSilentLoop();
         return;
     }
     
@@ -2280,10 +2361,12 @@ function onSequentialPsalmEnd() {
             }, 100);
         } else {
             sequentialPlayActive = false;
+            stopSilentLoop();
         }
     } else {
         // 已到最後一首，結束順序播放
         sequentialPlayActive = false;
+        stopSilentLoop();
         showCopyFeedback('✅ 順序朗讀完成', document.getElementById('sequentialPlayBtn'));
     }
 }
