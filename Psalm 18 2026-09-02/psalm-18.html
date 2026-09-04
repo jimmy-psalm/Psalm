@@ -450,6 +450,48 @@
             .copy-btn { font-size: 11.25px; padding: 3.75px 6.25px; }
             .arrow-btn { min-width: 22.5px; height: 22.5px; font-size: 11.25px; border-radius: 6px; }
         }
+        /* ===== 標籤清單捲軸：讓「上下捲動把手」清楚可見 ===== */
+        #legend {
+            scrollbar-width: thin;
+            scrollbar-color: #94a3b8 transparent;
+        }
+        #legend::-webkit-scrollbar { width: 6px; }
+        #legend::-webkit-scrollbar-track { background: transparent; }
+        #legend::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+
+        /* ===== 全高版面（PC 桌面）：讓 #legend 填滿搜尋手冊面板剩餘空間並自行捲動，避免標籤被裁切 ===== */
+        @media (min-width: 1200px) and (pointer: fine) {
+            #panelGroupTop > .panel-card:first-child {
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+            }
+            #panelGroupTop > .panel-card:first-child #legend {
+                flex: 1 1 0;
+                min-height: 0;
+                height: auto;
+                max-height: none;
+                overflow-y: auto;
+                margin-top: 4px;
+            }
+        }
+
+        /* ===== 全高版面（手機橫向）：同上，解決 iPhone 橫向標籤幾乎都無法捲動的問題 ===== */
+        @media (orientation: landscape) and (max-width: 1024px) and (pointer: coarse) {
+            #panelGroupTop > .panel-card:first-child {
+                display: flex;
+                flex-direction: column;
+                min-height: 0;
+            }
+            #panelGroupTop > .panel-card:first-child #legend {
+                flex: 1 1 0;
+                min-height: 0;
+                height: auto;
+                max-height: none;
+                overflow-y: auto;
+                margin-top: 4px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -491,7 +533,7 @@
         <div class="panel-card flex flex-col">
             <div id="panel3Header" class="bg-gradient-to-r from-gray-50 to-white px-3 py-2 border-b-2 border-slate-300 flex justify-between items-center flex-nowrap gap-1">
                 <div class="flex items-center gap-1.5 flex-nowrap min-w-0">
-                    <h3 class="font-bold text-gray-700 text-base tracking-wide whitespace-nowrap">詩篇分析</h3>
+                    <h3 id="panel3Title" class="font-bold text-gray-700 text-base tracking-wide whitespace-nowrap">詩篇分析</h3>
                     <span class="tp-group">
                         <span class="tp-label">⏱</span>
                         <button id="rateUpBtn" type="button" class="tp-btn" aria-label="提高語速">▲</button>
@@ -515,8 +557,7 @@
                 <div id="topAccent" class="h-1.5 w-full transition-colors"></div>
                 <div class="p-4 space-y-3 overflow-y-auto max-h-[360px]">
                     <div class="flex items-center gap-2 flex-wrap">
-                        <h2 id="pTitleDisplay" class="text-xl font-black text-slate-800 tracking-tight"></h2>
-                        <p id="pTypeLabel" class="text-base font-bold whitespace-nowrap"></p>
+                        <p id="pTypeLabel" class="text-sm font-semibold whitespace-nowrap"></p>
                     </div>
                     <div>
                         <div class="info-label">五向導分析（點選標籤可到綜合導讀篩選）</div>
@@ -596,7 +637,7 @@
         </div>
         <div id="scripturePanel" class="flex-1 p-4 scripture-scroll">
             <div id="scriptureEmptyState" class="text-center text-gray-400 flex flex-col items-center justify-center h-full min-h-[80px]"><p class="text-sm">點擊左側詩篇，顯示完整經文</p></div>
-            <div id="scriptureContent" class="hidden"><h3 id="scriptureTitle" class="text-lg font-bold text-slate-700 mb-3 pb-2 border-b border-gray-200"></h3><div id="scriptureText" class="verse-text text-slate-700 text-base leading-relaxed"></div></div>
+            <div id="scriptureContent" class="hidden"><div id="scriptureText" class="verse-text text-slate-700 text-base leading-relaxed"></div></div>
         </div>
     </div>
 </div>
@@ -669,7 +710,14 @@ let SEARCH_INDEX = window.SEARCH_INDEX || {};
 let GUIDE_FILTER = buildGuideFilterFromIndex(SEARCH_INDEX);
 let activeFacet = 'genre';
 let activeGuideGroup = '文學';
-let selectedSimpleTags = []; // 文體／處境／傳統：多標 OR
+let simpleTagsByFacet = {}; // 文體／處境／傳統：各組獨立陣列 { genre:[], mood:[], tradition:[] }
+
+// 回傳「目前分頁」那組的標籤陣列（綜合導讀 guide 不以這裡儲存）
+function tagsForCurrentSimpleFacet() {
+    if (activeFacet === 'guide') return [];
+    if (!simpleTagsByFacet[activeFacet]) simpleTagsByFacet[activeFacet] = [];
+    return simpleTagsByFacet[activeFacet];
+}
 let selectedGuideTags = {}; // { 類別名稱: [標籤] }
 
 let CLASSIFICATION = (window.PSALM_APP_DATA && window.PSALM_APP_DATA.CLASSIFICATION) || { majors: [], types: [], psalms: {} };
@@ -704,7 +752,7 @@ function currentAccent() {
         if (!en.length) return null;
         return GUIDE_COLORS[catGroupId(en[0][0])] || GUIDE_COLORS['文學'];
     }
-    if (selectedSimpleTags.length) return FACET_COLOR[activeFacet] || FACET_COLOR.genre;
+    if (tagsForCurrentSimpleFacet().length) return FACET_COLOR[activeFacet] || FACET_COLOR.genre;
     if (currentFilterTypeId != null || currentFilterMajor) return FACET_COLOR.guide;
     return null;
 }
@@ -937,11 +985,9 @@ function formatScriptureWithVerseNumbers(text) {
 function displayScripture(psalmNum) {
     const scriptureContentDiv = document.getElementById('scriptureContent');
     const emptyStateDiv = document.getElementById('scriptureEmptyState');
-    const scriptureTitle = document.getElementById('scriptureTitle');
     if (FULL_TEXTS[psalmNum] && FULL_TEXTS[psalmNum].text) {
         emptyStateDiv.classList.add('hidden');
         scriptureContentDiv.classList.remove('hidden');
-        scriptureTitle.textContent = FULL_TEXTS[psalmNum].title;
         const fullText = FULL_TEXTS[psalmNum].text;
         const hasStructure = PSALM_STRUCTURE[psalmNum] && parseStructureTags(PSALM_STRUCTURE[psalmNum]).length > 0;
         if (hasStructure) renderStructuredScripture(psalmNum, fullText);
@@ -1105,13 +1151,14 @@ function simpleFacetPsalms(tag) {
 }
 
 function psalmMatchesSimple(n) {
-    if (!selectedSimpleTags.length) return true;
-    return selectedSimpleTags.some(tag => simpleFacetPsalms(tag).includes(Number(n)));
+    const tags = tagsForCurrentSimpleFacet();
+    if (!tags.length) return true;
+    return tags.some(tag => simpleFacetPsalms(tag).includes(Number(n)));
 }
 
 function hasActiveSearch() {
     if (activeFacet === 'guide') return selectedGuideEntries().length > 0;
-    return selectedSimpleTags.length > 0;
+    return tagsForCurrentSimpleFacet().length > 0;
 }
 
 function psalmMatchesFilter(n, typeId = currentFilterTypeId, major = currentFilterMajor) {
@@ -1212,11 +1259,11 @@ function showDetail(n, el) {
     document.getElementById('emptyState').classList.add('hidden');
     document.getElementById('contentState').classList.remove('hidden');
     document.getElementById('topAccent').style.backgroundColor = accentBar;
-    document.getElementById('pTitleDisplay').textContent = `第 ${n} 篇`;
+    document.getElementById('panel3Title').textContent = `詩篇第 ${n} 篇分析`;
 
-    // 五大類 + 主分類（舊 type 僅作補充）
+    // 五大類 + 主分類（舊 type 僅作補充）→ 僅文體標籤，字級小於標題
     const genreText = genreLabelsFor(n).join(' · ') || cls.primary;
-    document.getElementById('pTypeLabel').textContent = `(文體：${genreText})`;
+    document.getElementById('pTypeLabel').textContent = `文體：${genreText}`;
     document.getElementById('pTypeLabel').style.color = accentText;
     renderPsalmTagDots(n);
     renderGuideAnalysis(n);
@@ -1258,7 +1305,7 @@ function currentSelectedLabels() {
     if (activeFacet === 'guide') {
         return selectedGuideEntries().flatMap(([cat, tags]) => asTagList(tags).map(tag => `${cat}·${tag}`));
     }
-    return selectedSimpleTags.slice();
+    return tagsForCurrentSimpleFacet().slice();
 }
 
 function updateGuideResultBar() {
@@ -1311,9 +1358,10 @@ function applyGridFilter() {
 
 function toggleSimpleTag(tag) {
     if (!sequentialPlayActive) stopSpeaking();
-    const i = selectedSimpleTags.indexOf(tag);
-    if (i >= 0) selectedSimpleTags.splice(i, 1);
-    else selectedSimpleTags.push(tag);
+    const tags = tagsForCurrentSimpleFacet();
+    const i = tags.indexOf(tag);
+    if (i >= 0) tags.splice(i, 1);
+    else tags.push(tag);
     currentFilterTypeId = null;
     currentFilterMajor = null;
     renderSearchManual();
@@ -1349,8 +1397,13 @@ function setActiveGuideGroup(groupId) {
 
 function clearGuideFilters() {
     if (!sequentialPlayActive) stopSpeaking();
-    selectedGuideTags = {};
-    selectedSimpleTags = [];
+    if (activeFacet === 'guide') {
+        // 綜合導讀：清掉整個綜合導讀的選取（其內 5 向子頁可合併計入）
+        selectedGuideTags = {};
+    } else {
+        // 文體／處境／傳統：只清目前這組，其他組保留（分組獨立）
+        tagsForCurrentSimpleFacet().length = 0;
+    }
     currentFilterTypeId = null;
     currentFilterMajor = null;
     renderSearchManual();
@@ -1364,7 +1417,7 @@ function filter(typeId) {
     const t = (CLASSIFICATION.types || []).find(x => Number(x.id) === tid);
     if (t) {
         activeFacet = 'genre';
-        selectedSimpleTags = [t.name];
+        simpleTagsByFacet.genre = [t.name];
     }
     renderSearchManual();
     applyGridFilter();
@@ -1683,7 +1736,9 @@ function speakSequentialChunks(chunks, btn, repeatCycle = false) {
         const item = chunks[idx];
         if (!item) {
             if (speechRepeatEnabled && repeatCycle) {
-                speakAt(0);
+                // 循環：若有「詩篇第 X 篇」播報 chunk 在前，第二輪起跳過它 → 只唸第一次
+                const loopStartIdx = (chunks[0] && chunks[0].announce) ? 1 : 0;
+                speakAt(loopStartIdx);
             } else {
                 clearSpeakingButtonState();
                 speechState.isSpeaking = false;
@@ -1750,17 +1805,53 @@ function showSpeechSettingHint(msg, color) {
     }, 1200);
 }
 
+// ===== 「詩篇第 X 篇」報篇號（全篇/順序朗讀用；綠色段落播放不加） =====
+function psalmAnnounceText() {
+    return currentPsalm ? `詩篇第 ${currentPsalm} 篇。` : '';
+}
+
+// 單次/順序：把播報放進分段輸入最前面（沿用第一個內容段的 index，唸播報時同步捲動到該段）
+function prependPsalmAnnounceToChunks(chunks) {
+    const a = psalmAnnounceText();
+    if (!a || !chunks.length) return chunks;
+    const firstIdx = Number.isInteger(chunks[0].index) ? chunks[0].index : undefined;
+    return [firstIdx !== undefined ? { index: firstIdx, text: a } : { text: a }, ...chunks];
+}
+
+// 單次/順序：無結構段時，把播報接到整篇文字最前面
+function prependPsalmAnnounceToContent(content) {
+    const a = psalmAnnounceText();
+    return a ? a + content : content;
+}
+
+// 循環（紅色全篇重複）：播報 chunk 帶 announce:true 記號，
+// speakSequentialChunks 第二輪起會跳過它 → 只唸第一次。
+// 若無結構段，把整篇當成單一 chunk，統一走分段循環，邏輯一致。
+function buildRepeatPsalmChunks(chunks) {
+    let out = (chunks && chunks.length) ? chunks.slice() : [];
+    if (!out.length) {
+        const t = getWholePsalmSpeechText();
+        if (t) out = [{ text: t }];
+    }
+    const a = psalmAnnounceText();
+    if (a && out.length) {
+        const firstIdx = Number.isInteger(out[0].index) ? out[0].index : undefined;
+        out = [firstIdx !== undefined ? { index: firstIdx, text: a, announce: true } : { text: a, announce: true }, ...out];
+    }
+    return out;
+}
+
 function readWholePsalm() {
     const btn = document.getElementById('copyScriptureBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
-    const chunks = getStructuredSpeechChunks();
+    const chunks = prependPsalmAnnounceToChunks(getStructuredSpeechChunks());
     if (chunks.length) {
         speakSequentialChunks(chunks, btn, false);
         return;
     }
     const panel = document.getElementById('scripturePanel');
     if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
-    const content = getWholePsalmSpeechText();
+    const content = prependPsalmAnnounceToContent(getWholePsalmSpeechText());
     speakCantonese(content, btn, '🔊 朗讀全篇中');
 }
 
@@ -1775,15 +1866,12 @@ function readSelectedSegment() {
 function readWholePsalmRepeat() {
     const btn = document.getElementById('copyScriptureBtn');
     if (!currentPsalm) { showCopyFeedback('⚠️ 尚未選擇詩篇', btn); return; }
-    const chunks = getStructuredSpeechChunks();
-    if (chunks.length) {
-        speakSequentialChunks(chunks, btn, true);
-        return;
-    }
     const panel = document.getElementById('scripturePanel');
     if (panel) panel.scrollTo({ top: 0, behavior: 'smooth' });
-    const content = getWholePsalmSpeechText();
-    speakCantonese(content, btn, '🔁 循環朗讀全篇中', true);
+    const chunks = buildRepeatPsalmChunks(getStructuredSpeechChunks());
+    if (chunks.length) {
+        speakSequentialChunks(chunks, btn, true);
+    }
 }
 
 function readSelectedSegmentRepeat() {
@@ -2126,12 +2214,12 @@ function startSequentialPlay() {
     
     // 朗讀當前詩篇
     const btn = document.getElementById('copyScriptureBtn');
-    const chunks = getStructuredSpeechChunks();
+    const chunks = prependPsalmAnnounceToChunks(getStructuredSpeechChunks());
     if (chunks.length) {
         // 使用 speakSequentialChunks 但修改 onend 行為
         speakSequentialChunksWithCallback(chunks, btn, false);
     } else {
-        const content = getWholePsalmSpeechText();
+        const content = prependPsalmAnnounceToContent(getWholePsalmSpeechText());
         speakCantoneseWithCallback(content, btn, '🔊 順序朗讀中');
     }
 }
@@ -2288,11 +2376,11 @@ function onSequentialPsalmEnd() {
             setTimeout(() => {
                 if (sequentialPlayActive) {
                     const btn = document.getElementById('copyScriptureBtn');
-                    const chunks = getStructuredSpeechChunks();
+                    const chunks = prependPsalmAnnounceToChunks(getStructuredSpeechChunks());
                     if (chunks.length) {
                         speakSequentialChunksWithCallback(chunks, btn, false);
                     } else {
-                        const content = getWholePsalmSpeechText();
+                        const content = prependPsalmAnnounceToContent(getWholePsalmSpeechText());
                         speakCantoneseWithCallback(content, btn, '🔊 順序朗讀中');
                     }
                 }
@@ -2364,7 +2452,7 @@ function renderSimpleFacetPills() {
     (facet.tags || []).forEach(tag => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        const selected = selectedSimpleTags.includes(tag);
+        const selected = tagsForCurrentSimpleFacet().includes(tag);
         btn.className = 'guide-pill' + (selected ? ' selected' : '');
         btn.textContent = `${tag} (${countSimpleTag(tag)})`;
         btn.setAttribute('aria-label', `篩選 ${tag}`);
