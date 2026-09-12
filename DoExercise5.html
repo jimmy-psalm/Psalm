@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>粵語計時運動助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: "PingFang HK", "Microsoft JhengHei", "Noto Sans HK", sans-serif;
+    background: linear-gradient(160deg, #0f2027, #203a43, #2c5364);
+    color: #fff; min-height: 100vh; display: flex; flex-direction: column;
+    user-select: none;
+  }
+  header { padding: 14px 16px 6px; text-align: center; }
+  header h1 { font-size: 20px; letter-spacing: 2px; }
+  header .sub { font-size: 12px; color: #9fd8e8; margin-top: 2px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 14px; justify-content: center; }
+  button {
+    border: none; border-radius: 12px; padding: 12px 16px; font-size: 15px;
+    font-weight: 700; cursor: pointer; transition: transform .08s, opacity .15s;
+    font-family: inherit;
+  }
+  button:active { transform: scale(.95); }
+  #btnMic { background: #ff9f43; color: #fff; flex: 1 1 140px; }
+  #btnMic.listening { background: #2ecc71; }
+  #btnReset { background: #e74c3c; color: #fff; }
+  #btnInterval { background: #3498db; color: #fff; min-width: 150px; }
+  #btnEnd { background: #8e44ad; color: #fff; }
+
+  .rate-box {
+    display: flex; align-items: center; gap: 10px; padding: 4px 18px 8px; justify-content: center;
+  }
+  .rate-box label { font-size: 13px; color: #cfe; }
+  .rate-box button { background: #16a085; color:#fff; padding: 8px 14px; font-size: 16px; }
+  #rateVal { min-width: 62px; text-align: center; font-size: 14px; color: #ffeaa7; font-weight: 700; }
+
+  .stats { display: flex; gap: 10px; padding: 6px 14px; }
+  .stat {
+    flex: 1; background: rgba(255,255,255,.08); border-radius: 14px; padding: 10px;
+    text-align: center; backdrop-filter: blur(4px);
+  }
+  .stat .label { font-size: 12px; color: #a8d8e8; }
+  .stat .value { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  #statRound { color: #ffeaa7; }
+  #statRound.running { color: #7bed9f; }
+
+  .status {
+    text-align: center; font-size: 13px; padding: 2px 10px 8px; min-height: 20px; color: #ffd7a8;
+  }
+
+  .history-wrap { flex: 1; overflow-y: auto; padding: 0 14px 14px; }
+  .history-title { font-size: 14px; color: #9fd8e8; padding: 4px 2px 6px; position: sticky; top: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 7px 6px; text-align: center; border-bottom: 1px solid rgba(255,255,255,.12); }
+  th { color: #9fd8e8; font-weight: 600; position: sticky; background: rgba(15,32,39,.95); }
+  td.done { color: #7bed9f; } td.cancel { color: #ff7675; }
+  .empty { text-align: center; color: #6b93a3; padding: 18px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏃 粵語計時運動助手</h1>
+  <div class="sub">講「開始」計時｜「停止」完成｜「取消」作廢｜「結束」總結</div>
+</header>
+
+<div class="controls">
+  <button id="btnMic">🎙️ 啟動語音控制</button>
+  <button id="btnInterval">⏱ 報時：1秒</button>
+  <button id="btnReset">🔄 重置</button>
+  <button id="btnEnd">🛑 結束</button>
+</div>
+
+<div class="rate-box">
+  <label>語速</label>
+  <button id="rateDown">−</button>
+  <div id="rateVal">1.50×</div>
+  <button id="rateUp">＋</button>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="label">總時間</div><div class="value" id="statTotal">0:00</div></div>
+  <div class="stat"><div class="label">完成次數</div><div class="value" id="statCount">0</div></div>
+  <div class="stat"><div class="label">本回合秒數</div><div class="value" id="statRound">–</div></div>
+</div>
+
+<div class="status" id="status">請按「啟動語音控制」開始</div>
+
+<div class="history-wrap">
+  <div class="history-title">📋 歷史記錄</div>
+  <table id="historyTable" style="display:none">
+    <thead><tr><th>次數</th><th>結果</th><th>用時</th></tr></thead>
+    <tbody id="historyBody"></tbody>
+  </table>
+  <div class="empty" id="emptyMsg">暫無記錄</div>
+</div>
+
+<script>
+(function(){
+  // ---------- 狀態 ----------
+  var completed = 0;            // 完成次數（「停止」才加）
+  var totalMs = 0;              // 運動總時間（只計有「開始」的回合）
+  var roundStart = 0;           // 本回合開始 timestamp
+  var roundActive = false;
+  var ended = false;
+  var intervals = [1000,5000,10000,30000,60000,120000,300000];
+  var intervalLabels = ['1秒','5秒','10秒','30秒','1分鐘','2分鐘','5分鐘'];
+  var intervalIdx = 0;
+  var rate = 1.5;
+  var speakQueue = [];
+  var speaking = false;
+  var tickTimer = null;
+
+  var els = {
+    mic: document.getElementById('btnMic'),
+    interval: document.getElementById('btnInterval'),
+    reset: document.getElementById('btnReset'),
+    end: document.getElementById('btnEnd'),
+    rateUp: document.getElementById('rateUp'),
+    rateDown: document.getElementById('rateDown'),
+    rateVal: document.getElementById('rateVal'),
+    statTotal: document.getElementById('statTotal'),
+    statCount: document.getElementById('statCount'),
+    statRound: document.getElementById('statRound'),
+    status: document.getElementById('status'),
+    historyTable: document.getElementById('historyTable'),
+    historyBody: document.getElementById('historyBody'),
+    emptyMsg: document.getElementById('emptyMsg')
+  };
+
+  // ---------- 粵語數字 ----------
+  var cnDigit = ['零','一','二','三','四','五','六','七','八','九'];
+  function twoDigit(n){ // 0-99 粵語讀法
+    if (n < 10) return cnDigit[n];
+    if (n === 10) return '十';
+    if (n < 20) return '十' + cnDigit[n % 10];
+    var t = Math.floor(n / 10), o = n % 10;
+    return cnDigit[t] + '十' + (o ? cnDigit[o] : '');
+  }
+  function secToSpeech(s){
+    if (s === 0) return '零';
+    if (s < 60) return twoDigit(s);
+    var m = Math.floor(s / 60), r = s % 60;
+    if (r === 0 && m === 1) return '一分鐘';
+    return twoDigit(m) + '分' + (r ? twoDigit(r) : '鐘');
+  }
+  function fmtDur(ms){
+    var s = Math.round(ms / 1000);
+    var m = Math.floor(s / 60); s = s % 60;
+    return m + '分' + (s < 10 ? '0' : '') + s + '秒';
+  }
+  function fmtClock(ms){
+    var s = Math.floor(ms / 1000);
+    var m = Math.floor(s / 60); s = s % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  // ---------- 語音合成（排隊，講完即續） ----------
+  function speak(text, priority){
+    if (priority){
+      try { speechSynthesis.cancel(); } catch(e){}
+      speakQueue.length = 0;
+      speaking = false;
+    }
+    speakQueue.push(text);
+    pumpSpeak();
+  }
+  function pumpSpeak(){
+    if (speaking || !speakQueue.length) return;
+    var text = speakQueue.shift();
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-HK'; u.rate = rate; u.pitch = 1;
+    var vs = speechSynthesis.getVoices();
+    for (var i = 0; i < vs.length; i++){
+      if (vs[i].lang === 'zh-HK' || vs[i].lang === 'yue-HK' || vs[i].lang === 'yue'){ u.voice = vs[i]; break; }
+    }
+    speaking = true;
+    u.onend = function(){ speaking = false; pumpSpeak(); };
+    u.onerror = function(){ speaking = false; pumpSpeak(); };
+    speechSynthesis.speak(u);
+  }
+
+  // ---------- 語音辨識 ----------
+  var rec = null, listening = false, recRestart = true;
+  function initRec(){
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR){ els.status.textContent = '此瀏覽器不支援語音辨識，請用 Chrome／Edge'; return; }
+    rec = new SR();
+    rec.lang = 'zh-HK'; rec.continuous = true; rec.interimResults = true;
+    rec.onstart = function(){
+      listening = true;
+      els.mic.textContent = '🎧 語音控制中（點擊停止）';
+      els.mic.classList.add('listening');
+    };
+    rec.onend = function(){
+      listening = false;
+      els.mic.classList.remove('listening');
+      if (recRestart && !ended){
+        try { rec.start(); } catch(e){ setTimeout(function(){ try{rec.start();}catch(e2){} }, 300); }
+      } else {
+        els.mic.textContent = '🎙️ 啟動語音控制';
+      }
+    };
+    rec.onerror = function(e){
+      if (e.error === 'not-allowed'){ els.status.textContent = '❌ 請允許使用咪高峰'; recRestart = false; }
+    };
+    rec.onresult = function(e){
+      for (var i = e.resultIndex; i < e.results.length; i++){
+        if (!e.results[i].isFinal) continue;
+        var text = e.results[i][0].transcript.replace(/[\s,.。，！!？?]/g, '');
+        handleCommand(text);
+      }
+    };
+  }
+  function handleCommand(text){
+    if (ended) return;
+    // 「結束」任何時候有效
+    if (/結束|完結|收工/.test(text)){ doEnd(); return; }
+    if (/開始|開波|起錶/.test(text)){
+      if (roundActive) return; // 已計緊，忽略
+      roundActive = true;
+      roundStart = Date.now();       // 立即計時，零延遲
+      var first = intervalIdx === 0; // 1秒模式即刻讀「一」
+      els.statRound.classList.add('running');
+      els.status.textContent = '▶ 回合進行中';
+      scheduleTicks(first);
+      return;
+    }
+    if (/停止|停|完成/.test(text)){ finishRound(true); return; }
+    if (/取消|作廢|唔計/.test(text)){ finishRound(false); return; }
+  }
+
+  // ---------- 報時 ----------
+  function scheduleTicks(sayFirst){
+    clearTimeout(tickTimer);
+    var step = intervals[intervalIdx];
+    function tick(){
+      if (!roundActive) return;
+      var el = Date.now() - roundStart;
+      var s = Math.floor(el / 1000);
+      speak(secToSpeech(s));
+      els.statRound.textContent = s + '秒';
+      tickTimer = setTimeout(tick, step);
+    }
+    if (sayFirst){
+      speak('開始');
+      tickTimer = setTimeout(tick, step);
+    } else {
+      tickTimer = setTimeout(tick, step);
+    }
+  }
+
+  function finishRound(isDone){
+    if (!roundActive) return;
+    roundActive = false;
+    clearTimeout(tickTimer);
+    var ms = Date.now() - roundStart;
+    totalMs += ms;
+    var s = Math.floor(ms / 1000);
+    if (isDone){
+      completed++;
+      speak('停止。第' + twoDigit(completed) + '次完成，用咗' + fmtDur(ms), true);
+      addHistory(completed, '完成', fmtDur(ms), true);
+    } else {
+      speak('取消。第' + twoDigit(completed + 1) + '次取消，用咗' + fmtDur(ms), true);
+      addHistory(completed + 1, '取消', fmtDur(ms), false);
+    }
+    els.statRound.classList.remove('running');
+    els.statRound.textContent = s + '秒';
+    els.status.textContent = '⏸ 等待「開始」';
+    refreshStats();
+  }
+
+  function doEnd(){
+    if (ended) return;
+    ended = true;
+    if (roundActive) finishRoundSilentCancel();
+    clearTimeout(tickTimer);
+    recRestart = false;
+    if (rec && listening){ try{ rec.stop(); }catch(e){} }
+    var summary = '今次運動，你總共完成咗' + twoDigit(completed) + '次，用咗' + fmtDur(totalMs);
+    speak(summary, true);
+    els.status.textContent = '🏁 ' + summary + '（程式已結束，請按「重置」重新開始）';
+    els.mic.textContent = '🎙️ 啟動語音控制';
+  }
+  function finishRoundSilentCancel(){ // 結束時有進行中回合：計入總時間但不記錄
+    roundActive = false;
+    totalMs += Date.now() - roundStart;
+    els.statRound.classList.remove('running');
+  }
+
+  function addHistory(x, result, dur, isDone){
+    els.emptyMsg.style.display = 'none';
+    els.historyTable.style.display = 'table';
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>第' + twoDigit(x) + '次</td><td class="' +
+      (isDone ? 'done">✅ 完成' : 'cancel">❌ 取消') + '</td><td>' + dur + '</td>';
+    els.historyBody.insertBefore(tr, els.historyBody.firstChild);
+  }
+
+  function refreshStats(){
+    els.statTotal.textContent = fmtClock(totalMs);
+    els.statCount.textContent = completed;
+  }
+
+  // ---------- 按鈕 ----------
+  els.mic.onclick = function(){
+    if (listening){ recRestart = false; try{ rec.stop(); }catch(e){} return; }
+    if (ended){ els.status.textContent = '程式已結束，請先按「重置」'; return; }
+    if (!rec) initRec();
+    if (!rec) return;
+    recRestart = true;
+    try { rec.start(); } catch(e){}
+  };
+  els.interval.onclick = function(){
+    intervalIdx = (intervalIdx + 1) % intervals.length;
+    els.interval.textContent = '⏱ 報時：' + intervalLabels[intervalIdx];
+    if (roundActive) scheduleTicks(false); // 即刻用新間隔報時
+  };
+  els.reset.onclick = function(){
+    completed = 0; totalMs = 0; roundActive = false; ended = false;
+    clearTimeout(tickTimer);
+    speakQueue.length = 0;
+    try { speechSynthesis.cancel(); } catch(e){}
+    els.historyBody.innerHTML = '';
+    els.historyTable.style.display = 'none';
+    els.emptyMsg.style.display = 'block';
+    els.statRound.textContent = '–';
+    els.statRound.classList.remove('running');
+    els.status.textContent = '已重置。請按「啟動語音控制」';
+    refreshStats();
+  };
+  els.end.onclick = doEnd;
+  els.rateUp.onclick = function(){ rate = Math.min(3, Math.round((rate + 0.1) * 10) / 10); els.rateVal.textContent = rate.toFixed(2) + '×'; };
+  els.rateDown.onclick = function(){ rate = Math.max(0.5, Math.round((rate - 0.1) * 10) / 10); els.rateVal.textContent = rate.toFixed(2) + '×'; };
+
+  refreshStats();
+})();
+</script>
+</body>
+</html>
