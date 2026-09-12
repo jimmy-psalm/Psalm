@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>粵語計時器</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2430; --line:#283040;
+  --text:#e6edf3; --muted:#8b949e;
+  --green:#3fb950; --orange:#f0883e; --red:#f85149; --blue:#58a6ff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Microsoft JhengHei","Noto Sans HK","Helvetica Neue",sans-serif;
+  display:flex; flex-direction:column; height:100dvh;
+}
+.wrap{max-width:720px;width:100%;margin:0 auto;display:flex;flex-direction:column;height:100%;}
+
+/* 上半部 */
+.top{flex:0 0 auto;padding:10px 12px 6px;}
+
+.title{font-size:14px;color:var(--muted);text-align:center;margin-bottom:8px;letter-spacing:1px;}
+
+.row{display:flex;gap:8px;margin-bottom:8px;}
+button{
+  font-family:inherit;font-size:15px;font-weight:600;
+  border:1px solid var(--line); background:var(--panel);
+  color:var(--text); border-radius:12px; padding:12px 10px;
+  cursor:pointer; transition:.15s; flex:1; user-select:none;
+}
+button:active{transform:scale(.97);}
+button.active{background:var(--green);border-color:var(--green);color:#04140a;}
+button.warn{color:var(--orange);}
+button.danger{color:var(--red);}
+button.small{font-size:14px;padding:10px 6px;}
+
+.ratebox{display:flex;align-items:center;gap:6px;flex:1;
+  border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:4px;}
+.ratebox button{flex:0 0 44px;border:none;background:transparent;font-size:20px;padding:6px 0;}
+.ratebox .rateval{flex:1;text-align:center;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums;}
+
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;}
+.stat{
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;
+  padding:10px 6px;text-align:center;
+}
+.stat-label{font-size:11px;color:var(--muted);margin-bottom:2px;}
+.stat-value{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.5px;}
+.stat-value.big{font-size:40px;line-height:1.05;color:var(--green);}
+.stat-value.run{color:var(--green);}
+.stat-value.stop{color:var(--muted);}
+
+.listen{
+  font-size:12px;color:var(--muted);text-align:center;
+  height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  margin-bottom:4px;
+}
+.listen b{color:var(--blue);font-weight:600;}
+
+/* 下半部 */
+.bottom{
+  flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  border-top:1px solid var(--line);padding:8px 12px 10px;
+}
+.hhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.hhead h2{font-size:13px;color:var(--muted);margin:0;font-weight:600;letter-spacing:1px;}
+.hhead .hint{font-size:11px;color:#5a6472;}
+
+.history{flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+.hrow{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 12px;border-radius:10px;margin-bottom:6px;
+  background:var(--panel);border-left:4px solid var(--line);
+  font-size:14px;font-variant-numeric:tabular-nums;
+}
+.hrow.done{border-left-color:var(--green);}
+.hrow.cancel{border-left-color:var(--orange);}
+.hrow .idx{flex:0 0 auto;color:var(--muted);font-size:13px;min-width:64px;}
+.hrow .type{flex:1 1 auto;font-weight:600;}
+.hrow.done .type{color:var(--green);}
+.hrow.cancel .type{color:var(--orange);}
+.hrow .time{flex:0 0 auto;color:var(--text);}
+.empty{color:#4d5563;text-align:center;padding:24px 0;font-size:14px;}
+
+.summary{
+  margin-top:6px;padding:12px;border-radius:12px;
+  background:linear-gradient(180deg,#182030,#141a24);
+  border:1px solid #2a3purple;border:1px solid #2a3446;
+  font-size:15px;line-height:1.7;text-align:center;color:var(--blue);
+}
+.summary b{color:var(--green);font-size:18px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="title">粵語計時器</div>
+
+    <div class="row">
+      <button id="btnVoice">🎤 啟動語音控制</button>
+      <button id="btnReset" class="danger">↺ 重置</button>
+    </div>
+
+    <div class="row">
+      <button id="btnInterval">報時：每 1 秒</button>
+      <div class="ratebox">
+        <button id="btnRateDown">−</button>
+        <span class="rateval" id="rateVal">語速 1.4×</span>
+        <button id="btnRateUp">＋</button>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">現在這回合</div>
+        <div class="stat-value big" id="curSec">0</div>
+        <div class="stat-label">秒</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">總時間</div>
+        <div class="stat-value" id="totalTime">00:00</div>
+        <div class="stat-label">&nbsp;</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">已完成</div>
+        <div class="stat-value" id="doneCount">0</div>
+        <div class="stat-label">次</div>
+      </div>
+    </div>
+
+    <div class="listen" id="listenLine">狀態：未啟動</div>
+  </div>
+
+  <div class="bottom">
+    <div class="hhead">
+      <h2>歷史記錄</h2>
+      <span class="hint">最新在最上</span>
+    </div>
+    <div class="history" id="history">
+      <div class="empty">還沒有記錄</div>
+    </div>
+    <div id="summaryBox"></div>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   工具：中文數字 / 時間格式
+   ============================================================ */
+const CN = ['零','一','二','三','四','五','六','七','八','九'];
+
+function numToCanto(n){
+  n = Math.floor(n);
+  if (n < 0) return String(n);
+  if (n < 10) return CN[n];
+  if (n < 20) return '十' + (n % 10 ? CN[n % 10] : '');
+  if (n < 100) return CN[Math.floor(n/10)] + '十' + (n % 10 ? CN[n % 10] : '');
+  return String(n);
+}
+function minWord(m){
+  if (m === 2) return '兩';
+  return numToCanto(m);
+}
+/* 秒數 → 粵語報時字串：  60 → 一分鐘  /  61 → 一分一  /  125 → 兩分五 */
+function secToCanto(sec){
+  sec = Math.floor(sec);
+  if (sec < 60) return numToCanto(sec);
+  const m = Math.floor(sec / 60), s = sec % 60;
+  if (s === 0) return minWord(m) + '分鐘';
+  return minWord(m) + '分' + numToCanto(s);
+}
+function fmtClock(ms){
+  const t = Math.max(0, Math.floor(ms/1000));
+  const h = Math.floor(t/3600), m = Math.floor((t%3600)/60), s = t%60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function fmtShort(ms){
+  const t = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(t/60), s = t%60;
+  return m > 0 ? `${m}分${s}秒` : `${s}秒`;
+}
+function clean(s){ return (s||'').replace(/[\s，。！？、,.!?！？~～]/g,''); }
+
+/* ============================================================
+   狀態
+   ============================================================ */
+const state = {
+  running:false,
+  startTs:0,
+  elapsedMs:0,      // 上一回合用時（停止後顯示）
+  completed:0,      // x：完成次數
+  totalMs:0,        // 所有「完成」回合的總時長
+  history:[],       // {idx, type, ms}
+  ended:false,
+  firstStartTs:null
+};
+
+let lastTickSec = -1;
+let pendingSec  = null;   // 待報的秒數（可被覆蓋 = 跳報）
+
+/* ============================================================
+   TTS（語音合成）
+   ============================================================ */
+const synth = window.speechSynthesis;
+let ttsRate = 1.4;
+let ttsLastText = '';
+let ttsLastStart = 0;
+let voice = null;
+
+function pickVoice(){
+  try{
+    const vs = synth.getVoices();
+    if (!vs || !vs.length) return null;
+    let v = vs.find(v => /yue|zh[-_]HK|zh[-_]Hant[-_]HK/i.test(v.lang));
+    if (!v) v = vs.find(v => /zh[-_]TW|zh[-_]Hant/i.test(v.lang));
+    if (!v) v = vs.find(v => /zh/i.test(v.lang));
+    return v || vs[0];
+  }catch(e){ return null; }
+}
+if (synth){
+  voice = pickVoice();
+  synth.onvoiceschanged = () => { voice = pickVoice(); };
+}
+
+function makeUtter(text){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-HK';
+  if (voice) u.voice = voice;
+  u.rate = ttsRate;
+  u.pitch = 1;
+  u.volume = 1;
+  return u;
+}
+
+/* 直接打斷並說（用於「第X次完成」等重點語句） */
+function sayInterrupt(text, cb){
+  ttsLastText = text;
+  ttsLastStart = Date.now();
+  const go = () => {
+    const u = makeUtter(text);
+    if (cb){ u.onend = cb; u.onerror = cb; }
+    try { synth.speak(u); } catch(e){ if(cb) cb(); }
+  };
+  if (synth.speaking || synth.pending){
+    try{ synth.cancel(); }catch(e){}
+    setTimeout(go, 45);
+  } else {
+    go();
+  }
+}
+
+/* 報時：只在引擎空閒時說，被覆蓋就等於跳報 */
+function pumpAnnounce(){
+  if (pendingSec === null) return;
+  if (!synth) { pendingSec = null; return; }
+  if (synth.speaking || synth.pending) return;   // 忙 → 等下一次 tick
+  const s = pendingSec;
+  pendingSec = null;
+  const text = secToCanto(s);
+  ttsLastText = text;
+  ttsLastStart = Date.now();
+  try { synth.speak(makeUtter(text)); } catch(e){}
+}
+
+/* ============================================================
+   語音識別
+   ============================================================ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recognizing = false;
+let wantRecognition = false;
+let permDenied = false;
+
+let lastCmdName = null, lastCmdTime = 0;
+
+function initRecognition(){
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'zh-HK';
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 3;
+
+  r.onstart = () => { recognizing = true; updateVoiceBtn(); };
+
+  r.onresult = (e) => {
+    if (state.ended) return;
+    const cands = [];
+    for (let i = e.resultIndex; i < e.results.length; i++){
+      const res = e.results[i];
+      const n = Math.min(res.length, 2);
+      for (let j = 0; j < n; j++){
+        const t = (res[j].transcript || '').trim();
+        if (t) cands.push(t);
+      }
+    }
+    for (const t of cands){
+      showHeard(t);
+      const cmd = detectCommand(t);
+      if (cmd){ tryCommand(cmd, t); return; }
+    }
+  };
+
+  r.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+      permDenied = true;
+      wantRecognition = false;
+      setStatus('❌ 麥克風權限被拒，請在瀏覽器設定允許後再試');
+    } else if (e.error === 'audio-capture'){
+      setStatus('❌ 找不到麥克風');
+    }
+  };
+
+  r.onend = () => {
+    recognizing = false;
+    updateVoiceBtn();
+    if (wantRecognition && !permDenied){
+      setTimeout(() => {
+        if (!wantRecognition || permDenied) return;
+        try { r.start(); } catch(err){}
+      }, 220);
+    }
+  };
+  return r;
+}
+
+function startVoice(){
+  if (!SR){
+    setStatus('❌ 此瀏覽器不支援語音識別，請用 Chrome / Edge');
+    return;
+  }
+  if (!recognition) recognition = initRecognition();
+  if (!recognition) return;
+  wantRecognition = true;
+  permDenied = false;
+  try { recognition.start(); } catch(e){}
+  setStatus('🎤 語音控制已啟動 — 請說「開始」');
+  updateVoiceBtn();
+}
+function stopVoice(){
+  wantRecognition = false;
+  try { recognition && recognition.stop(); } catch(e){}
+  recognizing = false;
+  updateVoiceBtn();
+  setStatus('語音控制已停止');
+}
+function updateVoiceBtn(){
+  const b = document.getElementById('btnVoice');
+  if (recognizing){
+    b.textContent = '⏹ 停止語音控制';
+    b.classList.add('active');
+  } else {
+    b.textContent = '🎤 啟動語音控制';
+    b.classList.remove('active');
+  }
+}
+
+/* 過濾 TTS 回音 */
+function isLeak(text){
+  if (Date.now() - ttsLastStart > 1500) return false;
+  const a = clean(text), b = clean(ttsLastText);
+  if (!a || !b) return false;
+  if (b.includes(a)) return true;
+  let rest = a;
+  for (const ch of b) rest = rest.split(ch).join('');
+  return rest.length === 0;
+}
+
+/* 指令判斷 */
+function detectCommand(text){
+  const t = clean(text);
+  if (!t) return null;
+  if (/(結束|结束|完結|完结|收工|全部完|完咗|完成運動)/.test(t)) return 'end';
+  if (/(取消|撤銷|撤消|唔要|不算)/.test(t)) return 'cancel';
+  if (/(停止|停下|停低|停一停|停手|停|夠了|够了)/.test(t)) return 'stop';
+  if (/(開始|开始|起步|預備開始|预备开始)/.test(t)) return 'start';
+  return null;
+}
+
+function tryCommand(cmd, raw){
+  if (isLeak(raw)) return;                     // 自己講嘅聲，唔理
+  const now = Date.now();
+  if (cmd === lastCmdName && now - lastCmdTime < 1500) return;  // 去重
+  lastCmdName = cmd;
+  lastCmdTime = now;
+  runCommand(cmd);
+}
+
+function runCommand(cmd){
+  if (state.ended) return;
+  switch(cmd){
+    case 'start':
+      if (state.running) return;
+      doStart();
+      break;
+    case 'stop':
+      if (!state.running) return;
+      doEndRound('完成');
+      break;
+    case 'cancel':
+      if (!state.running) return;
+      doEndRound('取消');
+      break;
+    case 'end':
+      doFinish();
+      break;
+  }
+}
+
+/* ============================================================
+   核心流程
+   ============================================================ */
+function doStart(){
+  state.running = true;
+  state.startTs = Date.now();
+  state.elapsedMs = 0;
+  lastTickSec = -1;
+  pendingSec = null;
+  if (state.firstStartTs === null) state.firstStartTs = state.startTs;
+  setStatus('▶️ 計時中…');
+  renderLive();
+}
+
+function doEndRound(type){
+  if (!state.running) return;
+  const durMs = Date.now() - state.startTs;
+  state.running = false;
+  state.elapsedMs = durMs;
+  pendingSec = null;
+
+  if (type === '完成'){
+    state.completed += 1;
+    state.totalMs += durMs;
+    state.history.push({ idx: state.completed, type: '完成', ms: durMs });
+    sayInterrupt(`第${numToCanto(state.completed)}次完成`);
+    setStatus(`✅ 第${state.completed}次完成 — ${fmtShort(durMs)}`);
+  } else {
+    state.history.push({ idx: state.completed, type: '取消', ms: durMs });
+    sayInterrupt(`第${numToCanto(state.completed)}次取消`);
+    setStatus(`⚠️ 第${state.completed}次取消 — ${fmtShort(durMs)}`);
+  }
+  renderLive();
+  renderHistory();
+}
+
+function doFinish(){
+  // 若仍在計時，先把本回合當作「完成」結算
+  if (state.running){
+    const durMs = Date.now() - state.startTs;
+    state.running = false;
+    state.elapsedMs = durMs;
+    state.completed += 1;
+    state.totalMs += durMs;
+    state.history.push({ idx: state.completed, type: '完成', ms: durMs });
+  }
+  state.ended = true;
+  pendingSec = null;
+  wantRecognition = false;
+  try { recognition && recognition.stop(); } catch(e){}
+  recognizing = false;
+  updateVoiceBtn();
+
+  renderLive();
+  renderHistory();
+
+  const totalSec = Math.floor(state.totalMs / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+
+  const spoken = `今次運動，你總共完成咗${numToCanto(state.completed)}次，用咗${numToCanto(m)}分${numToCanto(s)}秒。`;
+  sayInterrupt(spoken);
+
+  setStatus('🏁 運動結束');
+
+  const box = document.getElementById('summaryBox');
+  box.className = 'summary';
+  box.innerHTML = `今次運動，你總共完成咗 <b>${state.completed}</b> 次，用咗 <b>${m}</b> 分 <b>${s}</b> 秒。`;
+}
+
+/* ============================================================
+   計時器
+   ============================================================ */
+const INTERVALS = [
+  { sec:1,   label:'1 秒'   },
+  { sec:5,   label:'5 秒'   },
+  { sec:10,  label:'10 秒'  },
+  { sec:30,  label:'30 秒'  },
+  { sec:60,  label:'1 分鐘' },
+  { sec:120, label:'2 分鐘' },
+  { sec:300, label:'5 分鐘' }
+];
+let intervalIdx = 0;
+
+function currentInterval(){ return INTERVALS[intervalIdx].sec; }
+
+function onTick(){
+  if (state.running){
+    const now = Date.now();
+    const elapsed = now - state.startTs;
+    const sec = Math.floor(elapsed / 1000);
+
+    if (sec !== lastTickSec){
+      lastTickSec = sec;
+      if (sec > 0 && sec % currentInterval() === 0){
+        pendingSec = sec;     // 直接覆蓋 → 追唔上就跳報
+      }
+    }
+  }
+  pumpAnnounce();
+  renderLive();
+}
+
+/* ============================================================
+   渲染
+   ============================================================ */
+const elCurSec   = document.getElementById('curSec');
+const elTotal    = document.getElementById('totalTime');
+const elCount    = document.getElementById('doneCount');
+const elHistory  = document.getElementById('history');
+const elStatus   = document.getElementById('listenLine');
+const elSummary  = document.getElementById('summaryBox');
+const elInterval = document.getElementById('btnInterval');
+const elRateVal  = document.getElementById('rateVal');
+
+function renderLive(){
+  const now = Date.now();
+  const curMs  = state.running ? (now - state.startTs) : state.elapsedMs;
+  const curSec = Math.floor(curMs / 1000);
+
+  elCurSec.textContent = curSec;
+  elCurSec.className = 'stat-value big ' + (state.running ? 'run' : 'stop');
+
+  const liveTotal = state.totalMs + (state.running ? curMs : 0);
+  elTotal.textContent = fmtClock(liveTotal);
+  elCount.textContent = state.completed;
+}
+
+function renderHistory(){
+  if (!state.history.length){
+    elHistory.innerHTML = '<div class="empty">還沒有記錄</div>';
+    return;
+  }
+  const rows = state.history.slice().reverse().map(h => {
+    const cls = h.type === '完成' ? 'done' : 'cancel';
+    return `<div class="hrow ${cls}">
+      <span class="idx">第 ${h.idx} 次</span>
+      <span class="type">${h.type === '完成' ? '✅ 完成' : '⚠️ 取消'}</span>
+      <span class="time">${fmtShort(h.ms)}</span>
+    </div>`;
+  }).join('');
+  elHistory.innerHTML = rows;
+}
+
+function setStatus(txt){
+  elStatus.innerHTML = txt;
+}
+function showHeard(txt){
+  elStatus.innerHTML = `🎤 聽到：<b>${txt}</b>`;
+}
+
+/* ============================================================
+   按鈕事件
+   ============================================================ */
+document.getElementById('btnVoice').addEventListener('click', () => {
+  if (recognizing || wantRecognition) stopVoice();
+  else startVoice();
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  state.running = false;
+  state.startTs = 0;
+  state.elapsedMs = 0;
+  state.completed = 0;
+  state.totalMs = 0;
+  state.history = [];
+  state.ended = false;
+  state.firstStartTs = null;
+  lastTickSec = -1;
+  pendingSec = null;
+  try { synth.cancel(); } catch(e){}
+  elSummary.className = '';
+  elSummary.innerHTML = '';
+  renderLive();
+  renderHistory();
+  setStatus('↺ 已重置');
+});
+
+elInterval.addEventListener('click', () => {
+  intervalIdx = (intervalIdx + 1) % INTERVALS.length;
+  elInterval.textContent = '報時：每 ' + INTERVALS[intervalIdx].label;
+});
+
+document.getElementById('btnRateDown').addEventListener('click', () => {
+  ttsRate = Math.max(0.5, Math.round((ttsRate - 0.1) * 10) / 10);
+  elRateVal.textContent = '語速 ' + ttsRate.toFixed(1) + '×';
+});
+document.getElementById('btnRateUp').addEventListener('click', () => {
+  ttsRate = Math.min(3.0, Math.round((ttsRate + 0.1) * 10) / 10);
+  elRateVal.textContent = '語速 ' + ttsRate.toFixed(1) + '×';
+});
+
+/* ============================================================
+   啟動
+   ============================================================ */
+elInterval.textContent = '報時：每 ' + INTERVALS[0].label;
+elRateVal.textContent = '語速 ' + ttsRate.toFixed(1) + '×';
+renderLive();
+renderHistory();
+
+setInterval(onTick, 50);
+
+// 保險：Chrome 有時會自動 suspend speechSynthesis
+setInterval(() => {
+  try {
+    if (synth && synth.speaking && synth.paused) synth.resume();
+  } catch(e){}
+}, 3000);
+
+window.addEventListener('beforeunload', () => {
+  wantRecognition = false;
+  try { recognition && recognition.stop(); } catch(e){}
+  try { synth.cancel(); } catch(e){}
+});
+</script>
+</body>
+</html>
