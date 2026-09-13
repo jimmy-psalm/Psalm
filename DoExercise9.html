@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e1116">
+<title>粵語運動計時器</title>
+<style>
+:root{
+  --bg:#0e1116;--panel:#161b24;--panel2:#1e2530;--line:#2a3340;
+  --txt:#e8eef7;--dim:#8b98ab;--accent:#33d17a;--accent2:#2aa9ff;
+  --warn:#ff6b6b;--amber:#f5b942;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  min-height:100vh;padding:12px 12px 44px;overscroll-behavior:none;
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+}
+.wrap{max-width:640px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px}
+h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.5px;white-space:nowrap}
+#status{font-size:12px;color:var(--dim);padding:5px 11px;border-radius:20px;background:var(--panel);border:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55vw}
+#status.on{color:var(--accent);border-color:rgba(51,209,122,.45)}
+#status.rec{color:var(--warn);border-color:rgba(255,107,107,.45)}
+#status.err{color:var(--amber);border-color:rgba(245,185,66,.45)}
+
+.display{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px 16px 14px;text-align:center;margin-bottom:12px}
+#roundTime{font-size:58px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;letter-spacing:-1.5px;transition:color .2s}
+#roundTime.run{color:var(--accent)}
+.sub{font-size:11px;color:var(--dim);margin-top:8px;letter-spacing:2px}
+.meta{display:flex;gap:10px;margin-top:14px}
+.meta>div{flex:1;background:var(--panel2);border-radius:10px;padding:9px;font-size:11px;color:var(--dim)}
+.meta b{display:block;font-size:19px;color:var(--txt);margin-top:4px;font-weight:600;font-variant-numeric:tabular-nums}
+
+.row{display:flex;gap:10px;margin-bottom:12px}
+button{
+  font-family:inherit;font-size:14px;color:var(--txt);
+  background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+  padding:12px 14px;cursor:pointer;transition:background .15s,opacity .15s,transform .1s;
+  font-weight:500;touch-action:manipulation;
+}
+button:active{opacity:.75}
+button:disabled{opacity:.55;cursor:default}
+button.primary{flex:1;background:linear-gradient(135deg,#2aa9ff,#1c7fd6);border:none;font-weight:600;font-size:15px;color:#fff}
+button.primary.active{background:linear-gradient(135deg,#ff6b6b,#d64545)}
+button.ghost{flex:1}
+
+.section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+.section-title{font-size:12px;color:var(--dim);margin-bottom:9px;display:flex;justify-content:space-between;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.grid button{padding:11px 2px;font-size:13px;border-radius:10px}
+.grid button.on{background:rgba(42,169,255,.18);border-color:var(--accent2);color:#8fd0ff;font-weight:700}
+
+.rate-row{display:flex;align-items:center;gap:10px}
+.rate-row .val{flex:1;text-align:center;font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent2)}
+.rate-row button{width:56px;padding:10px 0;font-size:22px;font-weight:700;line-height:1}
+
+.hist-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px}
+.hist-head .t{font-size:12px;color:var(--dim)}
+#btnCopy{padding:7px 14px;font-size:12px;white-space:nowrap}
+#histList{max-height:36vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.hist-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:9px;background:var(--panel2);margin-bottom:6px;font-size:13px}
+.hist-item .n{font-weight:700;min-width:64px}
+.hist-item .ty{padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.hist-item.ok .ty{background:rgba(51,209,122,.16);color:var(--accent)}
+.hist-item.no .ty{background:rgba(245,185,66,.18);color:var(--amber)}
+.hist-item .tm{margin-left:auto;color:var(--dim);font-variant-numeric:tabular-nums}
+.empty{color:var(--dim);font-size:12px;text-align:center;padding:18px 0}
+.summary{margin-top:10px;padding:11px 13px;border-radius:10px;background:rgba(42,169,255,.1);border:1px solid rgba(42,169,255,.3);font-size:13px;line-height:1.7;display:none}
+.summary.show{display:block}
+.summary b{color:#8fd0ff}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:#2a3340;color:#fff;padding:10px 20px;border-radius:22px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:99;border:1px solid #3b4657;max-width:88vw;text-align:center}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>粵語運動計時器</h1>
+    <div id="status">未啟動</div>
+  </header>
+
+  <div class="display">
+    <div id="roundTime">0.0</div>
+    <div class="sub">秒</div>
+    <div class="meta">
+      <div>總時間<b id="totalTime">0:00</b></div>
+      <div>完成次數<b id="doneCount">0</b></div>
+    </div>
+  </div>
+
+  <div class="row">
+    <button id="btnStart" class="primary">啟動語音控制</button>
+    <button id="btnReset" class="ghost">重置</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span>報時間隔</span><span id="curInterval">每 1 秒</span></div>
+    <div class="grid" id="intervalBtns"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span>語速</span><span>慢 ← → 快</span></div>
+    <div class="rate-row">
+      <button id="rateDown">−</button>
+      <div class="val" id="rateVal">1.0</div>
+      <button id="rateUp">+</button>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="hist-head">
+      <span class="t">歷史記錄</span>
+      <button id="btnCopy">匯出到剪貼簿</button>
+    </div>
+    <div id="histList"><div class="empty">暫無記錄</div></div>
+    <div class="summary" id="summary"></div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= 元素 ================= */
+var $ = function(id){ return document.getElementById(id); };
+var elRound   = $('roundTime');
+var elTotal   = $('totalTime');
+var elDone    = $('doneCount');
+var elStatus  = $('status');
+var elHist    = $('histList');
+var elSummary = $('summary');
+var elCurIv   = $('curInterval');
+var elRateVal = $('rateVal');
+var btnStart  = $('btnStart');
+var btnReset  = $('btnReset');
+var btnCopy   = $('btnCopy');
+var elToast   = $('toast');
+
+/* ================= 狀態 ================= */
+var S = {
+  timing: false,
+  startTs: 0,
+  completed: 0,
+  history: [],
+  interval: 1,
+  rate: 1.0,
+  lastSpoken: -1,
+  listening: false,
+  starting: false
+};
+
+/* ================= 中文數字 ================= */
+var D = ['零','一','二','三','四','五','六','七','八','九'];
+function cnNum(n){
+  n = Math.floor(n);
+  if(n < 0) return '零';
+  if(n < 10) return D[n];
+  if(n < 20) return '十' + (n % 10 ? D[n % 10] : '');
+  if(n < 100){
+    var t = Math.floor(n/10), o = n % 10;
+    return D[t] + '十' + (o ? D[o] : '');
+  }
+  var h = Math.floor(n/100), r = n % 100;
+  return D[h] + '百' + (r ? (r < 10 ? '零' : '') + cnNum(r) : '');
+}
+
+/* 秒數 → 粵語報讀文字 */
+function secToText(s){
+  if(s < 60) return cnNum(s);
+  var m = Math.floor(s/60), r = s % 60;
+  var ms = (m === 2) ? '兩' : cnNum(m);
+  if(r === 0) return ms + '分鐘';
+  return ms + '分' + cnNum(r) + '秒';
+}
+
+function fmtDur(ms){
+  var t = Math.round(ms/1000);
+  if(t < 60) return t + '秒';
+  var m = Math.floor(t/60), s = t % 60;
+  return s ? (m + '分' + s + '秒') : (m + '分鐘');
+}
+function fmtClock(ms){
+  var t = Math.floor(ms/1000);
+  return Math.floor(t/60) + ':' + String(t % 60).padStart(2,'0');
+}
+
+/* ================= 語音合成 ================= */
+var voice = null;
+var recentTTS = [];
+
+function pickVoice(){
+  var vs = speechSynthesis.getVoices();
+  if(!vs || !vs.length) return null;
+  var want = ['yue-hk','zh-hk','zh-yue','yue','zh-mo','zh-tw','zh-cn'];
+  for(var i = 0; i < want.length; i++){
+    for(var j = 0; j < vs.length; j++){
+      var lg = (vs[j].lang || '').toLowerCase().replace('_','-');
+      if(lg.indexOf(want[i]) === 0) return vs[j];
+    }
+  }
+  for(var k = 0; k < vs.length; k++){
+    if((vs[k].lang || '').toLowerCase().indexOf('zh') === 0) return vs[k];
+  }
+  return null;
+}
+if('speechSynthesis' in window){
+  speechSynthesis.onvoiceschanged = function(){ voice = pickVoice(); };
+  setTimeout(function(){ voice = pickVoice(); }, 300);
+}
+
+function speak(text, interrupt){
+  if(!text) return;
+  if(interrupt === undefined) interrupt = true;
+  if(!('speechSynthesis' in window)) return;
+
+  try{
+    var u = new SpeechSynthesisUtterance(text);
+    if(voice){ u.voice = voice; u.lang = voice.lang; }
+    else u.lang = 'zh-HK';
+    u.rate = S.rate;
+    u.pitch = 1;
+    u.volume = 1;
+
+    recentTTS.push({ text: text, t: Date.now() });
+    while(recentTTS.length > 40) recentTTS.shift();
+
+    if(interrupt && (speechSynthesis.speaking || speechSynthesis.pending)){
+      try{ speechSynthesis.cancel(); }catch(e){}
+      setTimeout(function(){ try{ speechSynthesis.speak(u); }catch(e){} }, 15);
+    }else{
+      speechSynthesis.speak(u);
+    }
+  }catch(e){}
+}
+
+/* ================= 語音識別 ================= */
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+var recog = null;
+var recogRunning = false;
+var recogSession = 0;
+var restartTimer = null;
+var restartDelay = 250;
+var startWatchdog = null;
+
+function buildRecog(){
+  if(!SR) return null;
+
+  /* 徹底銷毀舊的 */
+  if(recog){
+    try{ recog.onend = null; }catch(e){}
+    try{ recog.onerror = null; }catch(e){}
+    try{ recog.onresult = null; }catch(e){}
+    try{ recog.onstart = null; }catch(e){}
+    try{ recog.abort(); }catch(e){}
+  }
+
+  var r = new SR();
+  var mySession = ++recogSession;
+
+  r.lang = 'yue-HK';
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 5;
+
+  r.onstart = function(){
+    if(mySession !== recogSession) return;
+    recogRunning = true;
+    restartDelay = 250;
+    clearTimeout(startWatchdog);
+  };
+
+  r.onresult = function(e){
+    if(mySession !== recogSession) return;
+    if(!S.listening) return;
+    try{
+      for(var i = e.resultIndex; i < e.results.length; i++){
+        var res = e.results[i];
+        for(var j = 0; j < res.length; j++){
+          checkCommand(res[j].transcript);
+        }
+      }
+    }catch(err){}
+  };
+
+  r.onerror = function(e){
+    if(mySession !== recogSession) return;
+    var code = e && e.error ? e.error : '';
+    if(code === 'not-allowed' || code === 'service-not-allowed'){
+      setStatus('麥克風被拒', 'err');
+      stopListening(true);
+    }else if(code === 'audio-capture'){
+      setStatus('找不到麥克風', 'err');
+    }else if(code === 'network'){
+      setStatus('網絡錯誤', 'err');
+    }
+    /* no-speech / aborted / 其他：交給 onend 處理重啟 */
+  };
+
+  r.onend = function(){
+    if(mySession !== recogSession) return;
+    recogRunning = false;
+    if(!S.listening) return;
+    scheduleRestart(r, mySession);
+  };
+
+  recog = r;
+  return r;
+}
+
+function scheduleRestart(r, mySession){
+  clearTimeout(restartTimer);
+  restartTimer = setTimeout(function(){
+    if(mySession !== recogSession) return;
+    if(!S.listening || recogRunning) return;
+    if(recog !== r) return;
+    try{
+      r.start();
+    }catch(err){
+      restartDelay = Math.min(restartDelay * 2, 2000);
+      scheduleRestart(r, mySession);
+    }
+  }, restartDelay);
+}
+
+function startRecogSafely(){
+  if(!recog || recogRunning) return;
+  try{ recog.start(); }catch(e){ /* 已在啟動中 */ }
+
+  clearTimeout(startWatchdog);
+  startWatchdog = setTimeout(function(){
+    if(S.listening && !recogRunning){
+      /* 4 秒沒 onstart → 重建再試 */
+      buildRecog();
+      try{ recog.start(); }catch(e){}
+    }
+  }, 4000);
+}
+
+/* 清除程式自己發聲造成的回音 */
+function stripEcho(t){
+  var now = Date.now();
+  for(var i = recentTTS.length - 1; i >= 0; i--){
+    var item = recentTTS[i];
+    if(now - item.t < 2500 && item.text && t.indexOf(item.text) !== -1){
+      t = t.split(item.text).join('');
+    }
+  }
+  return t;
+}
+
+/* 指令防抖 */
+var lastCmd = { name:'', t:0 };
+function fireCmd(name){
+  var now = Date.now();
+  if(lastCmd.name === name && now - lastCmd.t < 1200) return false;
+  lastCmd = { name:name, t:now };
+  return true;
+}
+
+var RE_END    = /結束|结束|完結|完结/;
+var RE_CANCEL = /取消/;
+var RE_STOP   = /停止|停低|停下/;
+var RE_START  = /開始|开始/;
+
+function checkCommand(raw){
+  if(!S.listening || !raw) return;
+
+  var t = raw.replace(/[\s,，。、！？!?.·\-—]/g, '');
+  if(!t) return;
+  t = stripEcho(t);
+  if(!t) return;
+
+  if(RE_END.test(t))    { doEnd();    return; }
+  if(RE_CANCEL.test(t)) { doCancel(); return; }
+  if(t === '停' || RE_STOP.test(t)) { doStop(); return; }
+  if(RE_START.test(t))  { doStart();  return; }
+}
+
+/* ================= 計時核心 ================= */
+var tickTimer = null;
+
+function startTicker(){
+  if(tickTimer) return;
+  tickTimer = setInterval(tick, 60);
+}
+function stopTicker(){
+  if(tickTimer){ clearInterval(tickTimer); tickTimer = null; }
+}
+
+function tick(){
+  if(!S.timing) return;
+  var elapsed = (performance.now() - S.startTs) / 1000;
+  var sec = Math.floor(elapsed);
+
+  elRound.textContent = elapsed.toFixed(1);
+  updateTotals();
+
+  if(sec > 0 && sec % S.interval === 0 && sec !== S.lastSpoken){
+    S.lastSpoken = sec;
+    speak(secToText(sec));
+  }
+}
+
+function doStart(){
+  if(S.timing) return;
+  if(!fireCmd('start')) return;
+
+  /* 先計時，後出聲，減低延遲 */
+  S.startTs = performance.now();
+  S.timing = true;
+  S.lastSpoken = -1;
+
+  elRound.classList.add('run');
+  startTicker();
+  updateTotals();
+
+  speak('開始');
+  setStatus('計時中…', 'rec');
+}
+
+function doStop(){
+  if(!S.timing) return;
+  if(!fireCmd('stop')) return;
+
+  var elapsed = performance.now() - S.startTs;
+  S.timing = false;
+  stopTicker();
+  elRound.classList.remove('run');
+
+  S.completed += 1;
+  var n = S.completed;
+  S.history.push({ n:n, type:'完成', elapsed:elapsed });
+
+  elRound.textContent = (elapsed/1000).toFixed(1);
+  renderHistory();
+  updateTotals();
+
+  speak('第' + cnNum(n) + '次完成');
+  setStatus('完成 ' + n + ' 次', 'on');
+}
+
+function doCancel(){
+  if(!S.timing) return;
+  if(!fireCmd('cancel')) return;
+
+  var elapsed = performance.now() - S.startTs;
+  S.timing = false;
+  stopTicker();
+  elRound.classList.remove('run');
+
+  var n = S.completed + 1;   /* 取消不增加完成次數 */
+  S.history.push({ n:n, type:'取消', elapsed:elapsed });
+
+  elRound.textContent = (elapsed/1000).toFixed(1);
+  renderHistory();
+  updateTotals();
+
+  speak('第' + cnNum(n) + '次取消');
+  setStatus('已取消', 'on');
+}
+
+function doEnd(){
+  if(!fireCmd('end')) return;
+
+  S.timing = false;
+  stopTicker();
+  elRound.classList.remove('run');
+
+  var totalMs = 0;
+  for(var i = 0; i < S.history.length; i++) totalMs += S.history[i].elapsed;
+  var t = Math.floor(totalMs/1000);
+  var m = Math.floor(t/60), sec = t % 60;
+
+  var parts = [];
+  parts.push('今次運動，你總共完成咗' + cnNum(S.completed) + '次');
+  if(m > 0) parts.push('用咗' + cnNum(m) + '分' + cnNum(sec) + '秒');
+  else      parts.push('用咗' + cnNum(sec) + '秒');
+  speak(parts.join('，'));
+
+  showSummary();
+  stopListening();
+  setStatus('已結束', '');
+}
+
+/* ================= 顯示 ================= */
+function updateTotals(){
+  var ms = 0;
+  for(var i = 0; i < S.history.length; i++) ms += S.history[i].elapsed;
+  if(S.timing) ms += performance.now() - S.startTs;
+  elTotal.textContent = fmtClock(ms);
+  elDone.textContent = S.completed;
+}
+
+function renderHistory(){
+  if(!S.history.length){
+    elHist.innerHTML = '<div class="empty">暫無記錄</div>';
+    return;
+  }
+  var html = '';
+  for(var i = 0; i < S.history.length; i++){
+    var h = S.history[i];
+    var cls = h.type === '完成' ? 'ok' : 'no';
+    html += '<div class="hist-item ' + cls + '">'
+          +   '<span class="n">第' + h.n + '次</span>'
+          +   '<span class="ty">' + h.type + '</span>'
+          +   '<span class="tm">' + fmtDur(h.elapsed) + '</span>'
+          + '</div>';
+  }
+  elHist.innerHTML = html;
+  elHist.scrollTop = elHist.scrollHeight;
+}
+
+function showSummary(){
+  var totalMs = 0;
+  var cancelCount = 0;
+  for(var i = 0; i < S.history.length; i++){
+    totalMs += S.history[i].elapsed;
+    if(S.history[i].type === '取消') cancelCount++;
+  }
+  var t = Math.floor(totalMs/1000);
+  var m = Math.floor(t/60), sec = t % 60;
+
+  elSummary.innerHTML =
+      '今次運動：總共完成 <b>' + S.completed + '</b> 次'
+    + (cancelCount ? '（取消 ' + cancelCount + ' 次）' : '')
+    + '，總耗時 <b>' + m + '分' + sec + '秒</b>。';
+  elSummary.classList.add('show');
+}
+
+function setStatus(text, cls){
+  elStatus.textContent = text;
+  elStatus.className = cls || '';
+}
+
+function toast(msg){
+  elToast.textContent = msg;
+  elToast.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function(){ elToast.classList.remove('show'); }, 1800);
+}
+
+/* ================= 螢幕長亮 ================= */
+var wakeLock = null;
+function requestWakeLock(){
+  if(!('wakeLock' in navigator)) return;
+  try{
+    navigator.wakeLock.request('screen').then(function(wl){
+      wakeLock = wl;
+      wl.addEventListener('release', function(){ wakeLock = null; });
+    }).catch(function(){});
+  }catch(e){}
+}
+function releaseWakeLock(){
+  if(wakeLock){ try{ wakeLock.release(); }catch(e){} wakeLock = null; }
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && S.listening){
+    requestWakeLock();
+    if(recog && !recogRunning){
+      try{ recog.start(); }catch(e){}
+    }
+  }
+});
+
+/* ================= 語音控制開關 ================= */
+function startListening(){
+  if(S.listening || S.starting) return;
+
+  if(!SR){
+    alert('此瀏覽器不支援語音識別。\n\n請使用：\n• Android 版 Chrome\n• 桌面版 Chrome / Edge\n\niOS Safari 尚未支援此功能。');
+    setStatus('不支援語音', 'err');
+    return;
+  }
+
+  S.starting = true;
+  S.listening = true;
+  lastCmd = { name:'', t:0 };
+
+  buildRecog();            /* 每次都是全新的辨識物件 */
+  startRecogSafely();      /* 同步啟動，保留用戶手勢 */
+  requestWakeLock();
+
+  S.starting = false;
+  btnStart.textContent = '停止語音控制';
+  btnStart.classList.add('active');
+  setStatus('聆聽中…請說「開始」', 'on');
+}
+
+function stopListening(fromError){
+  S.listening = false;
+  S.starting = false;
+
+  clearTimeout(restartTimer);
+  clearTimeout(startWatchdog);
+
+  if(recog){
+    try{ recog.onend = null; }catch(e){}
+    try{ recog.onerror = null; }catch(e){}
+    try{ recog.onresult = null; }catch(e){}
+    try{ recog.onstart = null; }catch(e){}
+    try{ recog.abort(); }catch(e){}
+  }
+  recogSession++;
+  recog = null;
+  recogRunning = false;
+
+  releaseWakeLock();
+  btnStart.textContent = '啟動語音控制';
+  btnStart.classList.remove('active');
+  if(!S.timing) setStatus(fromError ? '語音控制已停止' : '已停止', '');
+}
+
+/* ================= 重置 ================= */
+function resetAll(){
+  S.timing = false;
+  stopTicker();
+  S.completed = 0;
+  S.history = [];
+  S.startTs = 0;
+  S.lastSpoken = -1;
+
+  try{ speechSynthesis.cancel(); }catch(e){}
+  recentTTS.length = 0;
+
+  elRound.textContent = '0.0';
+  elRound.classList.remove('run');
+  elSummary.classList.remove('show');
+  renderHistory();
+  updateTotals();
+  setStatus(S.listening ? '聆聽中…請說「開始」' : '未啟動', S.listening ? 'on' : '');
+  toast('已重置');
+}
+
+/* ================= 匯出 ================= */
+function copyHistory(){
+  var now = new Date();
+  var d = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  var tm = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+  var totalMs = 0;
+  for(var i = 0; i < S.history.length; i++) totalMs += S.history[i].elapsed;
+  var t = Math.floor(totalMs/1000);
+  var mm = Math.floor(t/60), ss = t % 60;
+
+  var lines = [];
+  lines.push('日期：' + d + '　時間：' + tm);
+  lines.push('--------------------------------');
+  if(!S.history.length){
+    lines.push('（無記錄）');
+  }else{
+    for(var j = 0; j < S.history.length; j++){
+      var h = S.history[j];
+      lines.push('第' + h.n + '次　' + h.type + '　用時 ' + fmtDur(h.elapsed));
+    }
+  }
+  lines.push('--------------------------------');
+  lines.push('總耗時：' + mm + '分' + ss + '秒');
+  lines.push('總完成次數：' + S.completed + '次');
+
+  var text = lines.join('\n');
+
+  var fallback = function(){
+    try{
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      ta.style.top = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      document.execCommand('copy');
+      ta.remove();
+      toast('已複製到剪貼簿');
+    }catch(e){
+      toast('複製失敗');
+    }
+  };
+
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){
+      toast('已複製到剪貼簿');
+    }).catch(fallback);
+  }else{
+    fallback();
+  }
+}
+
+/* ================= 報時間隔按鈕 ================= */
+var INTERVALS = [
+  { label:'1秒',    v:1   },
+  { label:'2秒',    v:2   },
+  { label:'5秒',    v:5   },
+  { label:'10秒',   v:10  },
+  { label:'30秒',   v:30  },
+  { label:'1分鐘',  v:60  },
+  { label:'2分鐘',  v:120 },
+  { label:'5分鐘',  v:300 }
+];
+
+function ivLabel(v){
+  for(var i = 0; i < INTERVALS.length; i++){
+    if(INTERVALS[i].v === v) return '每 ' + INTERVALS[i].label;
+  }
+  return '每 ' + v + ' 秒';
+}
+
+function buildIntervalBtns(){
+  var box = $('intervalBtns');
+  box.innerHTML = '';
+  INTERVALS.forEach(function(item){
+    var b = document.createElement('button');
+    b.textContent = item.label;
+    b.dataset.v = item.v;
+    if(item.v === S.interval) b.classList.add('on');
+    b.addEventListener('click', function(){
+      S.interval = item.v;
+      S.lastSpoken = -1;
+      var kids = box.children;
+      for(var i = 0; i < kids.length; i++){
+        kids[i].classList.toggle('on', Number(kids[i].dataset.v) === S.interval);
+      }
+      elCurIv.textContent = ivLabel(S.interval);
+      toast('報時間隔：' + item.label);
+    });
+    box.appendChild(b);
+  });
+  elCurIv.textContent = ivLabel(S.interval);
+}
+
+/* ================= 語速 ================= */
+function setRate(v){
+  S.rate = Math.min(2.0, Math.max(0.5, Math.round(v * 10) / 10));
+  elRateVal.textContent = S.rate.toFixed(1);
+}
+
+/* ================= 事件綁定 ================= */
+btnStart.addEventListener('click', function(){
+  if(S.listening) stopListening();
+  else startListening();
+});
+
+btnReset.addEventListener('click', resetAll);
+btnCopy.addEventListener('click', copyHistory);
+
+$('rateUp').addEventListener('click', function(){ setRate(S.rate + 0.1); });
+$('rateDown').addEventListener('click', function(){ setRate(S.rate - 0.1); });
+
+/* 防止雙擊放大 */
+document.addEventListener('dblclick', function(e){ e.preventDefault(); }, { passive:false });
+
+/* 防止 iOS 回彈 */
+document.addEventListener('touchmove', function(e){
+  if(e.touches.length > 1) e.preventDefault();
+}, { passive:false });
+
+window.addEventListener('beforeunload', function(){
+  if(recog){ try{ recog.abort(); }catch(e){} }
+});
+
+/* ================= 初始化 ================= */
+buildIntervalBtns();
+setRate(1.0);
+renderHistory();
+updateTotals();
+
+if(!SR){
+  setStatus('瀏覽器不支援語音', 'err');
+}
+
+})();
+</script>
+</body>
+</html>
