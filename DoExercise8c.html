@@ -1,0 +1,1331 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0d0f14">
+<title>多功能計時記錄 V8c</title>
+<!--
+  多功能計時記錄 V8c
+  ------------------------------------------------------------------
+  V8   ：暫停／繼續、運動名稱記憶、報時限待機或暫停、新聞提要
+  V8b  ：多來源新聞、今天新聞／暫停新聞／繼續新聞
+  V8c  ：新聞可達數十條、跨媒體、播報時說出來源媒體名稱
+
+  【核心不可改動區】（V6 鎖屏續航的來源，任何重構都不得破壞）
+   1. speak() 必須「同步」：cancel() 之後立即 speechSynthesis.speak()，
+      嚴禁加入 setTimeout / requestAnimationFrame 等延遲。
+   2. 啟動語音控制時，必須在 click 手勢中呼叫「有聲」的 speak('準備好', true)
+      （volume = 1），不可改成靜音 utterance。
+   3. 計時用常駐 setInterval(tick, 30)，不可因 visibilitychange 而停止。
+   4. recognition.onend 必須自動重啟（120ms），startRecognition() 需有
+      try/catch + 250ms 重試。
+   5. 朗讀內容避免出現觸發字（開始／停止／取消／結束），以免自我觸發。
+      註：V8 會朗讀「開始 + 運動名」，靠 isEcho() 攔截回音，勿移除 isEcho。
+  ==================================================================
+-->
+<style>
+  :root{
+    --bg:#0d0f14; --panel:#171b23; --panel2:#1f242e; --panel3:#262c38;
+    --accent:#4ade80; --accent2:#22d3ee; --danger:#f87171; --warn:#fbbf24;
+    --text:#e6e9ef; --dim:#8b93a3; --line:#2a3140;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg); color:var(--text); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang HK","Noto Sans CJK HK","Microsoft JhengHei",sans-serif;
+    height:100vh; height:100dvh;
+    -webkit-user-select:none; user-select:none;
+    overscroll-behavior:none;
+  }
+  .wrap{
+    display:flex; flex-direction:column; height:100%;
+    max-width:560px; margin:0 auto; padding:10px 12px 12px; gap:8px;
+  }
+  .status{
+    text-align:center; font-size:16px; font-weight:800; letter-spacing:1px;
+    padding:9px; border-radius:10px; background:var(--panel);
+    color:var(--dim); transition:all .2s;
+  }
+  .status.off{color:var(--danger);}
+  .status.idle-on{color:var(--accent2);}
+  .status.running{color:#052e16;background:linear-gradient(90deg,#4ade80,#22d3ee);}
+  .status.paused{color:#451a03;background:linear-gradient(90deg,#fde68a,#fbbf24);}
+  .status.ended{color:#450a0a;background:linear-gradient(90deg,#fca5a5,#f87171);}
+
+  #newsBar{
+    display:none; align-items:center; gap:8px;
+    background:linear-gradient(90deg,#7c2d12,#9a3412);
+    border:1px solid #ea580c; border-radius:10px;
+    padding:7px 11px; font-size:12px; font-weight:700; color:#fed7aa;
+  }
+  #newsBar.on{display:flex;}
+  #newsBar .dot{
+    width:8px;height:8px;border-radius:50%;background:#fb923c;
+    box-shadow:0 0 8px #fb923c; animation:pulse 1s infinite;
+  }
+  #newsBar .dot.pause{background:#94a3b8;box-shadow:none;animation:none;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  #newsBar .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  .stats{display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:8px;}
+  .stat{
+    background:var(--panel); border-radius:12px; padding:10px 8px;
+    text-align:center; border:1px solid var(--line);
+  }
+  .stat .label{font-size:12px;color:var(--dim);margin-bottom:4px;letter-spacing:.5px;}
+  .stat .value{
+    font-size:22px; font-weight:800; font-variant-numeric:tabular-nums;
+    color:var(--text);
+  }
+  .stat .value.acc{color:var(--accent);}
+  .stat .value.cy{color:var(--accent2);}
+
+  .chips{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .rowLbl{font-size:12px; color:var(--dim); letter-spacing:1px; flex:0 0 auto;}
+  .chipWrap{display:flex; gap:6px; flex-wrap:wrap; flex:1;}
+  .chip{
+    border:1px solid var(--line); background:var(--panel); color:var(--dim);
+    border-radius:999px; padding:5px 10px; font-size:12px;
+    font-family:inherit; font-weight:700; cursor:pointer; transition:all .15s;
+  }
+  .chip.active{background:#1d6ef5; border-color:#1d6ef5; color:#fff;}
+  .chip:active{transform:scale(.95);}
+
+  .hist-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:2px 4px; font-size:13px; color:var(--dim); letter-spacing:.5px;
+  }
+  .hist-head b{color:var(--text);}
+
+  .controlbar{display:flex; gap:5px; align-items:stretch;}
+  .controlbar .btn{
+    flex:1 1 0; min-width:0; padding:9px 4px; font-size:11px; font-weight:700;
+    border-radius:10px; white-space:nowrap; overflow:hidden; border:none;
+    color:var(--text); background:var(--panel2); font-family:inherit;
+    cursor:pointer; transition:transform .08s, background .15s, box-shadow .15s;
+  }
+  .controlbar .btn:active{transform:scale(.96);}
+  .controlbar .btn.primary{flex:1.25 1 0;background:linear-gradient(135deg,#2563eb,#1d4ed8);}
+  .controlbar .btn.primary.on{
+    background:linear-gradient(135deg,#059669,#10b981);
+    box-shadow:0 0 0 2px rgba(74,222,128,.35), 0 0 14px rgba(74,222,128,.35);
+  }
+  .controlbar .btn.ghost{background:var(--panel2);}
+  .controlbar .btn:disabled{opacity:.45;}
+
+  .controlbar .rate{
+    flex:1.4 1 0; min-width:0;
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:2px 3px; gap:2px;
+  }
+  .controlbar .btn.tiny{
+    flex:0 0 auto; width:28px; height:28px; padding:0; border-radius:8px;
+    font-size:15px; line-height:1; background:var(--panel3); color:var(--text);
+    border:none; font-family:inherit; cursor:pointer; font-weight:700;
+  }
+  .controlbar .btn.tiny:active{transform:scale(.92);}
+  #rateVal{
+    flex:1 1 auto; font-size:11px; font-weight:700; min-width:0;
+    text-align:center; font-variant-numeric:tabular-nums; color:var(--warn);
+  }
+
+  .history{
+    flex:1; min-height:80px; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    background:var(--panel); border-radius:12px; border:1px solid var(--line);
+    padding:6px; display:flex; flex-direction:column; gap:6px;
+  }
+  .history::-webkit-scrollbar{width:4px;}
+  .history::-webkit-scrollbar-thumb{background:#3a4254;border-radius:4px;}
+  .empty{color:var(--dim);font-size:13px;text-align:center;padding:18px 0;}
+  .hist-item{
+    display:flex; align-items:center; gap:7px;
+    padding:9px 11px; border-radius:9px; background:var(--panel2);
+    border-left:4px solid var(--accent);
+    animation:slideIn .22s ease-out;
+  }
+  .hist-item.cancel{border-left-color:var(--danger);}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}
+  .hi-idx{font-weight:800;font-size:15px;min-width:58px;white-space:nowrap;}
+  .hi-ex{
+    font-size:12px;font-weight:700;color:var(--accent2);
+    background:rgba(34,211,238,.12);padding:2px 8px;border-radius:6px;
+    max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .hi-res{
+    font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px;
+    background:rgba(74,222,128,.15); color:var(--accent); white-space:nowrap;
+  }
+  .hist-item.cancel .hi-res{background:rgba(248,113,113,.15);color:var(--danger);}
+  .hi-time{margin-left:auto;font-variant-numeric:tabular-nums;font-size:14px;color:var(--dim);white-space:nowrap;}
+
+  .summary{
+    background:linear-gradient(135deg,#1e293b,#0f172a);
+    border:1px solid var(--accent2); border-radius:12px;
+    padding:12px 14px; font-size:15px; line-height:1.7; text-align:center;
+    animation:slideIn .3s ease-out;
+  }
+  .summary .big{font-size:20px;font-weight:800;color:var(--accent2);}
+  .hidden{display:none !important;}
+
+  .hint{font-size:11px;color:var(--dim);text-align:center;letter-spacing:.3px;line-height:1.6;}
+
+  #toast{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(20px);
+    background:#e6e9ef; color:#0d0f14; padding:10px 20px; border-radius:999px;
+    font-size:13px; font-weight:700; opacity:0; pointer-events:none;
+    transition:all .25s; z-index:99; max-width:86vw; text-align:center;
+  }
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="status" class="status">未啟動</div>
+
+  <div id="newsBar">
+    <span class="dot" id="newsDot"></span>
+    <span class="txt" id="newsTxt">新聞</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="label">總時間</div><div id="totalTime" class="value acc">00:00</div></div>
+    <div class="stat"><div class="label">完成次數</div><div id="completedVal" class="value cy">0</div></div>
+    <div class="stat"><div class="label">本回合</div><div id="roundSec" class="value">0.0</div></div>
+  </div>
+
+  <div class="chips">
+    <span class="rowLbl">報數</span>
+    <div id="intervalBtns" class="chipWrap"></div>
+  </div>
+
+  <div class="hist-head">
+    <span>歷史記錄</span>
+    <span>共 <b id="histCount">0</b> 條</span>
+  </div>
+
+  <div class="controlbar">
+    <div class="rate">
+      <button id="rateDown" class="btn tiny" aria-label="減慢語速">−</button>
+      <span id="rateVal">1.3x</span>
+      <button id="rateUp" class="btn tiny" aria-label="加快語速">＋</button>
+    </div>
+    <button id="exportBtn" class="btn ghost">📋 複製記錄</button>
+    <button id="resetBtn" class="btn ghost">🔄 重置</button>
+    <button id="voiceBtn" class="btn primary">🎤 語音控制</button>
+  </div>
+
+  <div id="history" class="history">
+    <div class="empty">暫無記錄</div>
+  </div>
+
+  <div id="summary" class="summary hidden"></div>
+  <div class="hint">
+    「開始」／「開始深蹲」計時・「暫停」暫停・「繼續」恢復<br>
+    「停止」完成・「取消」取消・「結束」總結<br>
+    待機或暫停時：「報時」報日期時間・「今天新聞」多來源數十條<br>
+    「暫停新聞」／「繼續新聞」控制新聞播放（不影響計時器）<br>
+    計時中：「報數」即時報數・「知道」回復正常報數
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  const voiceBtn     = $('voiceBtn');
+  const resetBtn     = $('resetBtn');
+  const exportBtn    = $('exportBtn');
+  const statusEl     = $('status');
+  const totalTimeEl  = $('totalTime');
+  const completedEl  = $('completedVal');
+  const roundSecEl   = $('roundSec');
+  const rateValEl    = $('rateVal');
+  const rateDownBtn  = $('rateDown');
+  const rateUpBtn    = $('rateUp');
+  const intervalEl   = $('intervalBtns');
+  const historyEl    = $('history');
+  const histCountEl  = $('histCount');
+  const summaryEl    = $('summary');
+  const toastEl      = $('toast');
+  const newsBarEl    = $('newsBar');
+  const newsDotEl    = $('newsDot');
+  const newsTxtEl    = $('newsTxt');
+
+  const STATE = { IDLE: 'idle', RUNNING: 'running', PAUSED: 'paused', ENDED: 'ended' };
+
+  let state            = STATE.IDLE;
+  let completedCount   = 0;
+  let completedTotalSec = 0;
+  let firstStartMs     = null;
+  let sessionDate      = null;
+  let totalMs          = 0;
+  let roundStartMs     = 0;
+  let roundAccumMs     = 0;
+  let pauseStartMs     = 0;
+  let pausedAccumMs    = 0;
+  let roundSec         = 0;
+  let lastReportedSec  = 0;
+  let reportInterval   = 1;
+  let speechRate       = 1.3;
+  let voiceControlOn   = false;
+  let history          = [];
+  let tickTimer        = null;
+  let cantoVoice       = null;
+  let sessionEnded     = false;
+
+  let fastReportMode   = false;
+  let numberHold       = false;
+
+  let currentExercise  = '';
+
+  let newsList         = [];
+  let newsIndex        = 0;
+  let newsPlaying      = false;
+  let newsPaused       = false;
+  let newsToken        = 0;
+  let newsBusy         = false;
+  let speakSeq         = 0;
+  let lastNewsCmdAt    = 0;
+
+  const NEWS_CMD_WINDOW = 900;
+
+  const REPORT_STEPS  = [1, 2, 5, 10, 30, 60, 120, 300, 600, 900, 1800, 2700, 3600];
+  const REPORT_LABELS = {
+    1:'1秒', 2:'2秒', 5:'5秒', 10:'10秒', 30:'30秒',
+    60:'1分鐘', 120:'2分鐘', 300:'5分鐘',
+    600:'10分鐘', 900:'15分鐘', 1800:'30分鐘', 2700:'45分鐘', 3600:'60分鐘'
+  };
+
+  function perfNow() {
+    return (window.performance && window.performance.now)
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  const DIGITS = ['零','一','二','三','四','五','六','七','八','九'];
+
+  function numToCanto(n) {
+    n = Math.floor(n);
+    if (n <= 0) return '零';
+    if (n < 10) return DIGITS[n];
+    if (n < 20) return '十' + (n % 10 ? DIGITS[n % 10] : '');
+    if (n < 100) {
+      const t = Math.floor(n / 10), o = n % 10;
+      return DIGITS[t] + '十' + (o ? DIGITS[o] : '');
+    }
+    const h = Math.floor(n / 100), r = n % 100;
+    return DIGITS[h] + '百' + (r === 0 ? '' : (r < 10 ? '零' + DIGITS[r] : numToCanto(r)));
+  }
+
+  function numToCanto2(n) {
+    n = Math.floor(n);
+    return n === 2 ? '兩' : numToCanto(n);
+  }
+
+  function secToCanto(sec) {
+    sec = Math.floor(sec);
+    if (sec < 60) return sec <= 0 ? '零' : numToCanto(sec);
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    let mStr;
+    if (m === 1) mStr = '一分';
+    else if (m === 2) mStr = '兩分';
+    else mStr = numToCanto(m) + '分';
+    if (s === 0) return mStr + '鐘';
+    return mStr + numToCanto(s);
+  }
+
+  function formatSec(sec) {
+    sec = Math.floor(sec);
+    if (sec < 60) return sec + '秒';
+    const m = Math.floor(sec / 60), s = sec % 60;
+    return m + '分' + String(s).padStart(2, '0') + '秒';
+  }
+
+  function formatMs(ms) {
+    const t = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const s = t % 60;
+    const mm = String(m).padStart(2, '0');
+    const ss = String(s).padStart(2, '0');
+    return h > 0 ? h + ':' + mm + ':' + ss : mm + ':' + ss;
+  }
+
+  function fmtClock(d) {
+    const p = n => String(n).padStart(2, '0');
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  const WEEK_CANTO = ['日','一','二','三','四','五','六'];
+
+  function yearToCanto(y) {
+    return String(y).split('').map(function (c) {
+      const d = DIGITS[+c];
+      return (d === undefined) ? '' : d;
+    }).join('');
+  }
+
+  function cantoDate(d) {
+    const y  = d.getFullYear();
+    const mo = d.getMonth() + 1;
+    const da = d.getDate();
+    const wk = WEEK_CANTO[d.getDay()];
+    const h24 = d.getHours();
+    const mi  = d.getMinutes();
+    const se  = d.getSeconds();
+
+    let period, h12;
+    if (h24 >= 5 && h24 < 12) {
+      period = '早上'; h12 = h24;
+    } else if (h24 >= 12 && h24 < 18) {
+      period = '下午'; h12 = (h24 - 12) || 12;
+    } else {
+      period = '晚上'; h12 = (h24 % 12) || 12;
+    }
+
+    return '今日係' + yearToCanto(y) + '年' + numToCanto(mo) + '月' + numToCanto(da) + '日，'
+         + '星期' + wk + '，'
+         + period + numToCanto(h12) + '時' + numToCanto(mi) + '分' + numToCanto(se) + '秒';
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c];
+    });
+  }
+
+  function pickVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const vs = speechSynthesis.getVoices() || [];
+    cantoVoice =
+      vs.find(v => /zh[-_]HK/i.test(v.lang)) ||
+      vs.find(v => /yue/i.test(v.lang)) ||
+      vs.find(v => /zh[-_]TW/i.test(v.lang)) ||
+      vs.find(v => /zh/i.test(v.lang)) ||
+      null;
+  }
+  if ('speechSynthesis' in window) {
+    pickVoice();
+    speechSynthesis.onvoiceschanged = pickVoice;
+  }
+
+  const recentSpoken = [];
+
+  function speak(text, interrupt, onEnd) {
+    if (!('speechSynthesis' in window)) return;
+
+    recentSpoken.push({ text: text, t: Date.now() });
+    if (recentSpoken.length > 80) recentSpoken.shift();
+
+    try {
+      if (interrupt !== false) speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-HK';
+      if (cantoVoice) u.voice = cantoVoice;
+      u.rate = speechRate;
+      u.pitch = 1;
+      u.volume = 1;
+      if (typeof onEnd === 'function') u.onend = onEnd;
+      speechSynthesis.speak(u);
+    } catch (e) { /* ignore */ }
+  }
+
+  function speakSeq_(text, interrupt, onEnd) {
+    const mySeq = ++speakSeq;
+    speak(text, interrupt, function () {
+      if (mySeq !== speakSeq) return;
+      if (typeof onEnd === 'function') onEnd();
+    });
+  }
+
+  function isEcho(text, now) {
+    const t = String(text).replace(/[\s，。！？、,.!?·]/g, '');
+    if (!t) return false;
+    for (let i = recentSpoken.length - 1; i >= 0; i--) {
+      const s = recentSpoken[i];
+      if (now - s.t > 2500) break;
+      if (s.text.indexOf(t) !== -1) return true;
+    }
+    return false;
+  }
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let recognitionRunning = false;
+  let restartTimer = null;
+  let lastCmd = '';
+  let lastCmdAt = 0;
+
+  function initRecognition() {
+    if (!SR) return null;
+    const r = new SR();
+    r.lang = 'zh-HK';
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+
+    r.onstart = () => { recognitionRunning = true; };
+
+    r.onresult = (e) => {
+      let text = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        text += e.results[i][0].transcript;
+      }
+      text = text.replace(/[\s,，。.!！?？、·]/g, '');
+      if (text) dispatch(text);
+    };
+
+    r.onerror = (e) => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        voiceControlOn = false;
+        updateUI();
+        alert('麥克風權限被拒絕，請在瀏覽器設定中允許使用麥克風。');
+      }
+    };
+
+    r.onend = () => {
+      recognitionRunning = false;
+      if (voiceControlOn && !sessionEnded) {
+        clearTimeout(restartTimer);
+        restartTimer = setTimeout(startRecognition, 120);
+      }
+    };
+
+    return r;
+  }
+  recognition = initRecognition();
+
+  function startRecognition() {
+    if (!recognition || recognitionRunning) return;
+    try {
+      recognition.start();
+      recognitionRunning = true;
+    } catch (e) {
+      recognitionRunning = false;
+      clearTimeout(restartTimer);
+      restartTimer = setTimeout(() => {
+        if (voiceControlOn && !sessionEnded) startRecognition();
+      }, 250);
+    }
+  }
+
+  function stopRecognition() {
+    clearTimeout(restartTimer);
+    if (!recognition) return;
+    try { recognition.stop(); } catch (e) {}
+    recognitionRunning = false;
+  }
+
+  const EX_FILLER_HEAD = /^(做|去|嚟|來|吓|下|個|種)/;
+  const EX_FILLER_WORD = /(啦|吧|啊|呀|喇|咯|嘅|囉|呢|嘛|先|住)/g;
+
+  function cleanExercise(s) {
+    if (!s) return '';
+    s = s.replace(/[\s，。！？、,.!?·]/g, '');
+    s = s.replace(EX_FILLER_WORD, '');
+    s = s.replace(EX_FILLER_HEAD, '');
+    s = s.replace(EX_FILLER_WORD, '');
+    if (s.length > 8) s = s.slice(0, 8);
+    return s;
+  }
+
+  function dispatch(raw) {
+    if (sessionEnded) return;
+
+    const now = Date.now();
+    if (isEcho(raw, now)) return;
+
+    if (/暫停新聞|暂停新闻/.test(raw)) {
+      lastNewsCmdAt = now;
+      fire('pauseNews', now);
+      return;
+    }
+    if (/繼續新聞|继续新闻/.test(raw)) {
+      lastNewsCmdAt = now;
+      fire('resumeNews', now);
+      return;
+    }
+    if (/今天新聞|今日新聞|今天新闻|今日新闻|新聞|新闻/.test(raw)) {
+      fire('news', now);
+      return;
+    }
+
+    if (/結束|结束|完結|完结/.test(raw)) { fire('end', now); return; }
+    if (/暫停|暂停|停一停/.test(raw))     { fire('pause', now); return; }
+    if (/繼續|继续|恢復|恢复|再開始|再开始/.test(raw)) { fire('resume', now); return; }
+    if (/停止|停下嚟|停下|停低/.test(raw)) { fire('stop', now); return; }
+    if (/取消/.test(raw))                  { fire('cancel', now); return; }
+
+    const mStart = raw.match(/(?:開始|开始)(.*)$/);
+    if (mStart) { fire('start', now, cleanExercise(mStart[1])); return; }
+
+    if (/報時|报时/.test(raw)) { fire('clock', now); return; }
+    if (/報數|报数/.test(raw)) { fire('count', now); return; }
+    if (/知道/.test(raw))      { fire('know',  now); return; }
+  }
+
+  function fire(cmd, now, arg) {
+    const sig = cmd + '|' + (arg || '');
+    if (sig === lastCmd && now - lastCmdAt < 900) return;
+    lastCmd = sig; lastCmdAt = now;
+
+    switch (cmd) {
+      case 'start':
+        if (state === STATE.IDLE) startRound(arg);
+        break;
+      case 'pause':
+        if (now - lastNewsCmdAt < NEWS_CMD_WINDOW) return;
+        if (state === STATE.RUNNING) pauseRound();
+        break;
+      case 'resume':
+        if (now - lastNewsCmdAt < NEWS_CMD_WINDOW) return;
+        if (newsPlaying || newsPaused) return;
+        if (state === STATE.PAUSED) resumeRound();
+        break;
+      case 'stop':
+        if (state === STATE.RUNNING || state === STATE.PAUSED) finishRound();
+        break;
+      case 'cancel':
+        if (state === STATE.RUNNING || state === STATE.PAUSED) cancelRound();
+        break;
+      case 'end':       endSession();     break;
+      case 'clock':     reportDateTime(); break;
+      case 'count':     reportNow();      break;
+      case 'know':      exitFastReport(); break;
+      case 'news':      todayNews();      break;
+      case 'pauseNews': pauseNews();      break;
+      case 'resumeNews':resumeNews();     break;
+    }
+  }
+
+  function roundElapsedMs() {
+    if (state === STATE.RUNNING) return roundAccumMs + (perfNow() - roundStartMs);
+    return roundAccumMs;
+  }
+
+  function currentPausedMs() {
+    return pausedAccumMs + (state === STATE.PAUSED ? (perfNow() - pauseStartMs) : 0);
+  }
+
+  function settlePause() {
+    if (state === STATE.PAUSED) {
+      pausedAccumMs += perfNow() - pauseStartMs;
+    }
+  }
+
+  function startRound(exerciseName) {
+    if (state === STATE.ENDED || state === STATE.RUNNING || state === STATE.PAUSED) return;
+
+    if (exerciseName) currentExercise = exerciseName;
+
+    if (firstStartMs === null) {
+      firstStartMs = perfNow();
+      sessionDate = new Date();
+    }
+
+    state = STATE.RUNNING;
+    roundStartMs = perfNow();
+    roundAccumMs = 0;
+    roundSec = 0;
+    lastReportedSec = 0;
+    fastReportMode = false;
+    numberHold = false;
+
+    if (!tickTimer) tickTimer = setInterval(tick, 30);
+
+    speak(currentExercise ? ('開始' + currentExercise) : '開始', true);
+    updateUI();
+  }
+
+  function pauseRound() {
+    if (state !== STATE.RUNNING) return;
+
+    roundAccumMs += perfNow() - roundStartMs;
+    state = STATE.PAUSED;
+    pauseStartMs = perfNow();
+    fastReportMode = false;
+    numberHold = false;
+
+    try { speechSynthesis.cancel(); } catch (e) {}
+    speak('暫停', true);
+
+    updateUI();
+  }
+
+  function resumeRound() {
+    if (state !== STATE.PAUSED) return;
+
+    pausedAccumMs += perfNow() - pauseStartMs;
+    roundStartMs = perfNow();
+    state = STATE.RUNNING;
+
+    lastReportedSec = Math.floor(roundAccumMs / 1000);
+    numberHold = false;
+
+    speak('繼續', true);
+    updateUI();
+  }
+
+  function tick() {
+    const now = perfNow();
+
+    if (firstStartMs !== null && !sessionEnded) {
+      totalMs = now - firstStartMs - currentPausedMs();
+      if (totalMs < 0) totalMs = 0;
+      totalTimeEl.textContent = formatMs(totalMs);
+    }
+
+    if (state !== STATE.RUNNING) return;
+
+    const elapsedMs = roundAccumMs + (now - roundStartMs);
+    const sec = Math.floor(elapsedMs / 1000);
+
+    roundSec = sec;
+    roundSecEl.textContent = (elapsedMs / 1000).toFixed(1);
+
+    if (sec < 1 || sec <= lastReportedSec) return;
+    if (numberHold) return;
+
+    if (fastReportMode) {
+      if (sec % 5 === 0) {
+        lastReportedSec = sec;
+        speak(secToCanto(sec), true);
+      }
+      return;
+    }
+
+    if (reportInterval === 1 || sec % reportInterval === 0) {
+      lastReportedSec = sec;
+
+      if (reportInterval >= 60 && sec >= reportInterval) {
+        fastReportMode = true;
+        toast('夠鐘！轉為每 5 秒報數，講「知道」回復正常');
+        speak('夠鐘', true);
+      } else {
+        speak(secToCanto(sec), true);
+      }
+    }
+  }
+
+  function stopTick() {
+    if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+  }
+
+  function finishRound() {
+    if (state !== STATE.RUNNING && state !== STATE.PAUSED) return;
+
+    const elapsedMs = roundElapsedMs();
+    const sec = Math.floor(elapsedMs / 1000);
+
+    settlePause();
+    state = STATE.IDLE;
+    fastReportMode = false;
+    numberHold = false;
+
+    completedCount += 1;
+    completedTotalSec += sec;
+
+    addHistory(completedCount, '完成', sec, currentExercise);
+    updateUI();
+
+    let msg = '第' + numToCanto(completedCount) + '次完成';
+    if (currentExercise) msg = currentExercise + '，' + msg;
+    speak(msg, true);
+  }
+
+  function cancelRound() {
+    if (state !== STATE.RUNNING && state !== STATE.PAUSED) return;
+
+    const elapsedMs = roundElapsedMs();
+    const sec = Math.floor(elapsedMs / 1000);
+
+    settlePause();
+    state = STATE.IDLE;
+    fastReportMode = false;
+    numberHold = false;
+
+    const idx = completedCount + 1;
+    addHistory(idx, '取消', sec, currentExercise);
+    updateUI();
+
+    let msg = '第' + numToCanto(idx) + '次取消';
+    if (currentExercise) msg = currentExercise + '，' + msg;
+    speak(msg, true);
+  }
+
+  function endSession() {
+    if (sessionEnded) return;
+
+    settlePause();
+    if (state === STATE.RUNNING || state === STATE.PAUSED) state = STATE.IDLE;
+
+    sessionEnded = true;
+    state = STATE.ENDED;
+    voiceControlOn = false;
+    fastReportMode = false;
+    numberHold = false;
+    stopNews();
+    stopRecognition();
+    stopTick();
+
+    if (firstStartMs !== null) {
+      totalMs = perfNow() - firstStartMs - pausedAccumMs;
+      if (totalMs < 0) totalMs = 0;
+    }
+    const totalSec = Math.floor(totalMs / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+
+    let txt = '今次運動';
+    if (currentExercise) txt += '，' + currentExercise;
+    txt += '，你總共完成咗' + numToCanto(completedCount) + '次，';
+    if (m > 0 && s > 0)      txt += '用咗' + numToCanto2(m) + '分' + numToCanto2(s) + '秒';
+    else if (m > 0)          txt += '用咗' + numToCanto2(m) + '分鐘';
+    else                     txt += '用咗' + numToCanto(s) + '秒';
+    speak(txt, true);
+
+    summaryEl.classList.remove('hidden');
+    summaryEl.innerHTML =
+      '🏁 今次運動總結<br>' +
+      (currentExercise ? '項目：<span class="big">' + escHtml(currentExercise) + '</span><br>' : '') +
+      '總共完成 <span class="big">' + completedCount + '</span> 次<br>' +
+      '完成總耗時 <span class="big">' + formatSec(completedTotalSec) + '</span>' +
+      (completedCount === 0 ? '<br><span style="font-size:12px;color:#8b93a3">（未有任何完成記錄）</span>' : '');
+
+    updateUI();
+  }
+
+  function isIdleOrPaused() {
+    return state === STATE.IDLE || state === STATE.PAUSED;
+  }
+
+  function holdNewsForOtherSpeech() {
+    if (newsPlaying) {
+      newsToken++;
+      newsPlaying = false;
+      newsPaused = true;
+      updateNewsBar();
+    }
+  }
+
+  function reportDateTime() {
+    if (!isIdleOrPaused()) {
+      toast('⏱️ 計時中唔受理「報時」，請先講「暫停」');
+      return;
+    }
+
+    const now = Date.now();
+    if (reportDateTime._last && now - reportDateTime._last < 2000) return;
+    reportDateTime._last = now;
+
+    holdNewsForOtherSpeech();
+
+    const txt = cantoDate(new Date());
+    numberHold = true;
+
+    clearTimeout(reportDateTime._t);
+    reportDateTime._t = setTimeout(function () { numberHold = false; }, 20000);
+
+    speak(txt, true, function () {
+      clearTimeout(reportDateTime._t);
+      numberHold = false;
+    });
+
+    toast('🗓️ 報時中…（報數暫停，計時繼續）');
+  }
+
+  function reportNow() {
+    const now = Date.now();
+    if (reportNow._last && now - reportNow._last < 1200) return;
+    reportNow._last = now;
+
+    let sec = 0;
+    if (state === STATE.RUNNING || state === STATE.PAUSED) {
+      sec = Math.floor(roundElapsedMs() / 1000);
+    }
+    if (sec < 0) sec = 0;
+    lastReportedSec = sec;
+    speak(secToCanto(sec), true);
+    toast('🔢 即時報數：' + sec + ' 秒');
+  }
+
+  function exitFastReport() {
+    if (!fastReportMode) return;
+    fastReportMode = false;
+    lastReportedSec = (state === STATE.RUNNING)
+      ? Math.floor(roundElapsedMs() / 1000)
+      : 0;
+    toast('✅ 已回復原本報數間隔');
+  }
+
+  const NEWS_FEEDS = [
+    { url: 'https://news.google.com/rss?hl=zh-HK&gl=HK&ceid=HK:zh-Hant', name: 'Google新聞' },
+    { url: 'https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant', name: 'Google新聞' },
+    { url: 'https://rthk9.rthk.hk/rthk/news/rss/c_expressnews_clocal.xml', name: '香港電台' },
+    { url: 'https://rthk9.rthk.hk/rthk/news/rss/c_expressnews_cinternational.xml', name: '香港電台' },
+    { url: 'https://rthk9.rthk.hk/rthk/news/rss/c_expressnews_cgreaterchina.xml', name: '香港電台' },
+    { url: 'https://news.mingpao.com/rss/pns/s00001.xml', name: '明報' },
+    { url: 'https://std.stheadline.com/rss/dailynews.xml', name: '星島日報' }
+  ];
+
+  const NEWS_PROXIES = [
+    function (u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); },
+    function (u) { return 'https://corsproxy.io/?url=' + encodeURIComponent(u); },
+    function (u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); }
+  ];
+
+  const PER_SOURCE = 8;
+  const MAX_TOTAL  = 50;
+
+  async function fetchHeadlines() {
+    const seen = new Set();
+    const out  = [];
+
+    for (let f = 0; f < NEWS_FEEDS.length; f++) {
+      if (out.length >= MAX_TOTAL) break;
+      const feed = NEWS_FEEDS[f];
+
+      for (let p = 0; p < NEWS_PROXIES.length; p++) {
+        try {
+          const res = await fetch(NEWS_PROXIES[p](feed.url), { cache: 'no-store' });
+          if (!res.ok) continue;
+
+          const xml = await res.text();
+          const doc = new DOMParser().parseFromString(xml, 'text/xml');
+          if (doc.querySelector('parsererror')) continue;
+
+          const items = doc.querySelectorAll('item');
+          if (!items.length) continue;
+
+          let count = 0;
+          for (let i = 0; i < items.length && count < PER_SOURCE && out.length < MAX_TOTAL; i++) {
+            const tNode = items[i].querySelector('title');
+            if (!tNode) continue;
+
+            let raw = tNode.textContent.trim().replace(/[\r\n\t]/g, ' ');
+
+            let source = '';
+            const m = raw.match(/\s+-\s+([^\-]{1,30})$/);
+            if (m) {
+              source = m[1].trim();
+              raw = raw.replace(/\s+-\s+[^\-]{1,30}$/, '').trim();
+            }
+            if (!source) source = feed.name;
+
+            let t = raw.replace(/[「」『』【】《》]/g, '').trim();
+            if (t.length < 4) continue;
+
+            const key = t.slice(0, 20);
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            if (t.length > 46) t = t.slice(0, 46);
+            out.push({ title: t, source: source });
+            count++;
+          }
+          break;
+        } catch (e) { /* 試下一個代理 */ }
+      }
+    }
+    return out;
+  }
+
+  function updateNewsBar() {
+    if (newsPlaying) {
+      newsBarEl.classList.add('on');
+      newsDotEl.classList.remove('pause');
+      const cur = newsList[Math.min(newsIndex, newsList.length - 1)];
+      const src = cur && cur.source ? ('｜' + cur.source) : '';
+      newsTxtEl.textContent =
+        '📰 新聞播放中（第 ' + Math.min(newsIndex + 1, newsList.length) +
+        '／' + newsList.length + ' 條' + src + '）— 講「暫停新聞」';
+    } else if (newsPaused) {
+      newsBarEl.classList.add('on');
+      newsDotEl.classList.add('pause');
+      const cur = newsList[Math.min(newsIndex, newsList.length - 1)];
+      const src = cur && cur.source ? ('｜' + cur.source) : '';
+      newsTxtEl.textContent =
+        '⏸ 新聞已暫停（第 ' + Math.min(newsIndex + 1, newsList.length) +
+        '／' + newsList.length + ' 條' + src + '）— 講「繼續新聞」';
+    } else {
+      newsBarEl.classList.remove('on');
+      newsTxtEl.textContent = '';
+    }
+  }
+
+  function playNewsFrom(startIndex) {
+    const myToken = ++newsToken;
+    newsIndex = Math.max(0, Math.min(startIndex, newsList.length));
+    newsPlaying = true;
+    newsPaused = false;
+    updateNewsBar();
+
+    function speakNext() {
+      if (myToken !== newsToken) return;
+      if (newsIndex >= newsList.length) {
+        newsPlaying = false;
+        newsPaused = false;
+        updateNewsBar();
+        toast('✅ 新聞播報完畢，講「今天新聞」可再聽');
+        return;
+      }
+
+      const i = newsIndex;
+      const item = newsList[i];
+      const prefix = '第' + numToCanto(i + 1) + '條，';
+      const srcPart = item.source ? (item.source + '，') : '';
+      speakSeq_(prefix + srcPart + item.title + '。', true, function () {
+        if (myToken !== newsToken) return;
+        newsIndex = i + 1;
+        updateNewsBar();
+        setTimeout(speakNext, 220);
+      });
+    }
+    speakNext();
+  }
+
+  async function todayNews() {
+    if (!isIdleOrPaused()) {
+      toast('⏱️ 計時中唔受理「新聞」，請先講「暫停」');
+      return;
+    }
+    if (newsBusy) { toast('📰 正在攞新聞…'); return; }
+
+    newsToken++;
+    newsPlaying = false;
+    newsPaused = false;
+    updateNewsBar();
+
+    newsBusy = true;
+    toast('📰 正在攞今日新聞…');
+    speak('攞緊新聞', true);
+
+    let list = [];
+    try { list = await fetchHeadlines(); } catch (e) { list = []; }
+    newsBusy = false;
+
+    if (!list.length) {
+      if (newsList.length) {
+        toast('⚠️ 未能更新，播放上次新聞');
+        playNewsFrom(0);
+      } else {
+        speak('攞唔到新聞，請檢查網絡連線', true);
+        toast('❌ 未能取得新聞');
+      }
+      return;
+    }
+
+    newsList = list;
+
+    const srcSet = new Set();
+    list.forEach(function (it) { if (it.source) srcSet.add(it.source); });
+
+    playNewsFrom(0);
+    toast('📰 共 ' + list.length + ' 條，來自 ' + srcSet.size + ' 個媒體，開始播放');
+  }
+
+  function pauseNews() {
+    if (!newsPlaying) {
+      toast(newsPaused ? '📰 新聞已經暫停' : '📰 新聞未在播放');
+      return;
+    }
+    newsToken++;
+    newsPlaying = false;
+    newsPaused = true;
+    try { speechSynthesis.cancel(); } catch (e) {}
+    updateNewsBar();
+    toast('⏸ 新聞已暫停，講「繼續新聞」恢復');
+  }
+
+  function resumeNews() {
+    if (!newsPaused) {
+      toast('📰 沒有暫停的新聞');
+      return;
+    }
+    if (!newsList.length) {
+      toast('📰 沒有新聞可播');
+      return;
+    }
+    playNewsFrom(newsIndex);
+    toast('▶️ 新聞繼續播放');
+  }
+
+  function stopNews() {
+    newsToken++;
+    newsPlaying = false;
+    newsPaused = false;
+    updateNewsBar();
+  }
+
+  function updateUI() {
+    statusEl.className = 'status';
+
+    if (state === STATE.RUNNING) {
+      statusEl.textContent = currentExercise
+        ? ('🔴 ' + currentExercise + ' 計時中…')
+        : '🔴 計時中… 講「停止」或「取消」';
+      statusEl.classList.add('running');
+    } else if (state === STATE.PAUSED) {
+      statusEl.textContent = currentExercise
+        ? ('⏸ ' + currentExercise + ' 已暫停 — 講「繼續」')
+        : '⏸ 已暫停 — 講「繼續」或「取消」';
+      statusEl.classList.add('paused');
+    } else if (state === STATE.ENDED) {
+      statusEl.textContent = '✅ 已結束';
+      statusEl.classList.add('ended');
+    } else if (voiceControlOn) {
+      statusEl.textContent = currentExercise
+        ? ('待機（' + currentExercise + '）— 請講「開始」')
+        : '待機 — 請講「開始」或「開始＋項目」';
+      statusEl.classList.add('idle-on');
+    } else {
+      statusEl.textContent = '未啟動';
+      statusEl.classList.add('off');
+    }
+
+    if (voiceControlOn) {
+      voiceBtn.textContent = '🎤 語音控制中';
+      voiceBtn.classList.add('on');
+    } else {
+      voiceBtn.textContent = '🎤 語音控制';
+      voiceBtn.classList.remove('on');
+    }
+    voiceBtn.disabled = sessionEnded;
+
+    totalTimeEl.textContent = formatMs(totalMs);
+    if (state !== STATE.RUNNING) roundSecEl.textContent = '0.0';
+    completedEl.textContent = completedCount;
+    histCountEl.textContent = history.length;
+  }
+
+  function addHistory(index, result, sec, exercise) {
+    history.push({ index, result, sec, exercise: exercise || '' });
+    renderHistory();
+  }
+
+  function renderHistory() {
+    if (!history.length) {
+      historyEl.innerHTML = '<div class="empty">暫無記錄</div>';
+      histCountEl.textContent = '0';
+      return;
+    }
+    historyEl.innerHTML = history.map(function (h) {
+      const cls = h.result === '完成' ? '' : 'cancel';
+      const ex  = h.exercise ? '<span class="hi-ex">' + escHtml(h.exercise) + '</span>' : '';
+      return '<div class="hist-item ' + cls + '">' +
+               '<span class="hi-idx">第 ' + h.index + ' 次</span>' +
+               ex +
+               '<span class="hi-res">' + h.result + '</span>' +
+               '<span class="hi-time">' + formatSec(h.sec) + '</span>' +
+             '</div>';
+    }).join('');
+    histCountEl.textContent = history.length;
+    historyEl.scrollTop = historyEl.scrollHeight;
+  }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  }
+
+  function buildRecordText() {
+    const now = new Date();
+    const p = n => String(n).padStart(2, '0');
+
+    let out = '';
+    out += '多功能計時記錄\n';
+    out += '日期：' + now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate()) + '\n';
+    out += '匯出時間：' + fmtClock(now) + '\n';
+    if (sessionDate) out += '開始時間：' + fmtClock(sessionDate) + '\n';
+    out += '────────────────────────\n';
+
+    if (!history.length) {
+      out += '（無記錄）\n';
+    } else {
+      for (let i = 0; i < history.length; i++) {
+        const it = history[i];
+        out += '第' + it.index + '次\t' + (it.exercise || '（未指定）') +
+               '\t' + it.result + '\t' + formatSec(it.sec) + '\n';
+      }
+    }
+
+    out += '────────────────────────\n';
+    out += '總共完成：' + completedCount + ' 次\n';
+    out += '總耗時：' + formatSec(completedTotalSec) + '\n';
+
+    const byEx = {};
+    const order = [];
+    history.forEach(function (h) {
+      const k = h.exercise || '（未指定）';
+      if (!byEx[k]) { byEx[k] = { done: 0, cancel: 0, sec: 0 }; order.push(k); }
+      if (h.result === '完成') {
+        byEx[k].done += 1;
+        byEx[k].sec += h.sec;
+      } else {
+        byEx[k].cancel += 1;
+      }
+    });
+
+    if (order.length) {
+      out += '────────────────────────\n';
+      out += '分項統計：\n';
+      order.forEach(function (k) {
+        const v = byEx[k];
+        out += k + '：完成 ' + v.done + ' 次' +
+               (v.cancel ? '／取消 ' + v.cancel + ' 次' : '') +
+               '，耗時 ' + formatSec(v.sec) + '\n';
+      });
+    }
+
+    return out;
+  }
+
+  async function copyRecords() {
+    const txt = buildRecordText();
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(txt);
+      } else {
+        throw new Error('no clipboard');
+      }
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { document.execCommand('copy'); } catch (e2) {}
+      document.body.removeChild(ta);
+    }
+    toast('✅ 已複製到剪貼簿');
+  }
+
+  (function buildIntervalButtons() {
+    REPORT_STEPS.forEach((v) => {
+      const b = document.createElement('button');
+      b.className = 'chip' + (v === reportInterval ? ' active' : '');
+      b.textContent = REPORT_LABELS[v];
+      b.dataset.v = v;
+      b.addEventListener('click', () => {
+        reportInterval = v;
+        fastReportMode = false;
+        const all = intervalEl.querySelectorAll('.chip');
+        for (let i = 0; i < all.length; i++) all[i].classList.remove('active');
+        b.classList.add('active');
+        lastReportedSec = state === STATE.RUNNING ? roundSec : 0;
+        toast('報數間隔：' + REPORT_LABELS[v]);
+      });
+      intervalEl.appendChild(b);
+    });
+  })();
+
+  voiceBtn.addEventListener('click', () => {
+    if (sessionEnded) { toast('已結束，請先按「重置」'); return; }
+    if (!recognition) {
+      alert('此瀏覽器不支援語音辨識。\n請使用 Chrome 或 Edge（桌面版 / Android）。');
+      return;
+    }
+    voiceControlOn = !voiceControlOn;
+    if (voiceControlOn) {
+      startRecognition();
+      speak('準備好', true);
+    } else {
+      stopRecognition();
+      speechSynthesis.cancel();
+      stopNews();
+    }
+    updateUI();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    stopTick();
+    state = STATE.IDLE;
+    sessionEnded = false;
+    completedCount = 0;
+    completedTotalSec = 0;
+    totalMs = 0;
+    roundSec = 0;
+    lastReportedSec = 0;
+    roundStartMs = 0;
+    roundAccumMs = 0;
+    pauseStartMs = 0;
+    pausedAccumMs = 0;
+    firstStartMs = null;
+    sessionDate = null;
+    history = [];
+    lastCmd = ''; lastCmdAt = 0;
+    fastReportMode = false;
+    numberHold = false;
+    newsBusy = false;
+    lastNewsCmdAt = 0;
+    reportDateTime._last = 0;
+    reportNow._last = 0;
+    recentSpoken.length = 0;
+    stopNews();
+    summaryEl.classList.add('hidden');
+    summaryEl.innerHTML = '';
+    try { speechSynthesis.cancel(); } catch (e) {}
+    renderHistory();
+    updateUI();
+    if (voiceControlOn && !sessionEnded) startRecognition();
+    toast(currentExercise ? ('已重置（項目：' + currentExercise + '）') : '已重置');
+  });
+
+  exportBtn.addEventListener('click', copyRecords);
+
+  rateDownBtn.addEventListener('click', () => changeRate(-0.1));
+  rateUpBtn.addEventListener('click', () => changeRate(0.1));
+
+  function changeRate(d) {
+    speechRate = Math.round((speechRate + d) * 10) / 10;
+    speechRate = Math.max(0.5, Math.min(2.5, speechRate));
+    rateValEl.textContent = speechRate.toFixed(1) + 'x';
+  }
+
+  function init() {
+    rateValEl.textContent = speechRate.toFixed(1) + 'x';
+    renderHistory();
+    updateUI();
+    updateNewsBar();
+
+    if ('speechSynthesis' in window) {
+      try {
+        const u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        u.lang = 'zh-HK';
+        speechSynthesis.speak(u);
+      } catch (e) {}
+    }
+  }
+  init();
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // 保留計時
+    } else {
+      if ((state === STATE.RUNNING || state === STATE.PAUSED) && !tickTimer) {
+        tickTimer = setInterval(tick, 30);
+      }
+    }
+  });
+
+  document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+})();
+</script>
+</body>
+</html>
