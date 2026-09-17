@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0">
+
+<title>新聞語音助手 V1</title>
+
+<style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont,
+                     "PingFang TC", "Microsoft JhengHei",
+                     sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f5f5f5;
+        color: #222;
+    }
+
+    .container {
+        max-width: 800px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        box-shadow: 0 3px 15px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+        margin-top: 0;
+        text-align: center;
+    }
+
+    #status {
+        padding: 15px;
+        background: #eee;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        font-size: 18px;
+        line-height: 1.5;
+    }
+
+    #currentNews {
+        padding: 15px;
+        background: #f8f8f8;
+        border-radius: 10px;
+        margin-bottom: 15px;
+        line-height: 1.6;
+    }
+
+    button {
+        font-size: 17px;
+        padding: 12px 18px;
+        margin: 5px;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+    }
+
+    #newsList {
+        margin-top: 20px;
+    }
+
+    .news-item {
+        border-bottom: 1px solid #ddd;
+        padding: 15px 5px;
+    }
+
+    .news-number {
+        font-weight: bold;
+        font-size: 18px;
+    }
+
+    .source {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .title {
+        font-size: 17px;
+        margin-top: 5px;
+        font-weight: bold;
+    }
+
+    .description {
+        margin-top: 5px;
+        line-height: 1.5;
+    }
+
+    a {
+        color: #0066cc;
+    }
+
+    .warning {
+        color: #b00020;
+        font-weight: bold;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>📰 新聞語音助手 V1</h1>
+
+    <div id="status">
+        狀態：等待指令
+    </div>
+
+    <div id="currentNews">
+        尚未開始新聞朗讀。
+    </div>
+
+    <div style="text-align:center;">
+
+        <button onclick="startNews()">
+            📰 今天新聞
+        </button>
+
+        <button onclick="pauseNews()">
+            ⏸ 暫停新聞
+        </button>
+
+        <button onclick="resumeNews()">
+            ▶️ 繼續新聞
+        </button>
+
+        <button onclick="stopNews()">
+            ⏹ 停止新聞
+        </button>
+
+    </div>
+
+    <div id="newsList"></div>
+
+</div>
+
+
+<script>
+
+/************************************************************
+ *                    1. 設定區
+ ************************************************************/
+
+/*
+ * 把你在 NewsAPI 取得的 API Key 放在下面。
+ *
+ * 例如：
+ *
+ * const API_KEY = "xxxxxxxxxxxxxxxxxxxx";
+ *
+ */
+
+const API_KEY =
+"49499388a1234b5daa798507f502be0c";
+
+
+/*
+ * 最少新聞數量
+ */
+const MIN_NEWS = 50;
+
+
+/*
+ * 我們實際搜尋多少篇。
+ *
+ * 因為搜尋到的新聞可能有重複事件，
+ * 所以先抓多一些，再進行去重。
+ */
+const FETCH_COUNT = 100;
+
+
+/*
+ * NewsAPI endpoint
+ */
+const NEWS_API =
+    "https://newsapi.org/v2/everything";
+
+
+/*
+ * 搜尋的語言。
+ *
+ * V1 先以英文國際新聞為主，
+ * 因為免費新聞 API 的英文來源通常較完整。
+ */
+const LANGUAGE = "en";
+
+
+/************************************************************
+ *                    2. 程式狀態
+ ************************************************************/
+
+let newsArticles = [];
+
+let currentNewsIndex = 0;
+
+let isReading = false;
+
+let isPaused = false;
+
+let recognition = null;
+
+let recognitionRunning = false;
+
+
+/************************************************************
+ *                    3. HTML 元素
+ ************************************************************/
+
+const statusElement =
+    document.getElementById("status");
+
+const currentNewsElement =
+    document.getElementById("currentNews");
+
+const newsListElement =
+    document.getElementById("newsList");
+
+
+/************************************************************
+ *                    4. 顯示狀態
+ ************************************************************/
+
+function setStatus(text) {
+
+    statusElement.textContent =
+        "狀態：" + text;
+
+}
+
+
+/************************************************************
+ *                    5. 清除 HTML 特殊字符
+ *
+ * 防止新聞內容中的 HTML 破壞頁面。
+ ************************************************************/
+
+function escapeHTML(text) {
+
+    if (!text) return "";
+
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+
+}
+
+
+/************************************************************
+ *                    6. 清理新聞文字
+ ************************************************************/
+
+function cleanText(text) {
+
+    if (!text) return "";
+
+    return text
+        .replace(/\s+/g, " ")
+        .replace(/\[\+\d+ chars\]/gi, "")
+        .trim();
+
+}
+
+
+/************************************************************
+ *                    7. 計算標題相似度
+ *
+ * V1 使用簡單版本。
+ *
+ * 將標題拆成單字，
+ * 計算兩個標題共同出現多少字。
+ *
+ * 如果相似度太高，
+ * 就視為同一事件。
+ ************************************************************/
+
+function titleSimilarity(titleA, titleB) {
+
+    const wordsA =
+        new Set(
+            titleA
+                .toLowerCase()
+                .replace(/[^\w\s]/g, "")
+                .split(/\s+/)
+                .filter(word => word.length > 3)
+        );
+
+    const wordsB =
+        new Set(
+            titleB
+                .toLowerCase()
+                .replace(/[^\w\s]/g, "")
+                .split(/\s+/)
+                .filter(word => word.length > 3)
+        );
+
+    if (wordsA.size === 0 ||
+        wordsB.size === 0) {
+
+        return 0;
+    }
+
+    let common = 0;
+
+    wordsA.forEach(word => {
+
+        if (wordsB.has(word)) {
+            common++;
+        }
+
+    });
+
+    const smaller =
+        Math.min(wordsA.size, wordsB.size);
+
+    return common / smaller;
+
+}
+
+
+/************************************************************
+ *                    8. 新聞去重
+ ************************************************************/
+
+function removeDuplicateNews(articles) {
+
+    const uniqueArticles = [];
+
+    for (const article of articles) {
+
+        if (!article.title) {
+            continue;
+        }
+
+        const title =
+            cleanText(article.title);
+
+        let duplicate = false;
+
+        for (const existing of uniqueArticles) {
+
+            const similarity =
+                titleSimilarity(
+                    title,
+                    existing.title
+                );
+
+            /*
+             * 70% 以上相似，
+             * 視為同一新聞事件。
+             */
+            if (similarity >= 0.70) {
+
+                duplicate = true;
+                break;
+
+            }
+
+        }
+
+        if (!duplicate) {
+
+            uniqueArticles.push({
+
+                source:
+                    article.source &&
+                    article.source.name
+                        ? article.source.name
+                        : "未知來源",
+
+                title:
+                    cleanText(article.title),
+
+                description:
+                    cleanText(article.description),
+
+                url:
+                    article.url || "",
+
+                publishedAt:
+                    article.publishedAt || ""
+
+            });
+
+        }
+
+    }
+
+    return uniqueArticles;
+
+}
+
+
+/************************************************************
+ *                    9. 搜尋新聞
+ ************************************************************/
+
+async function fetchNews() {
+
+    if (!API_KEY ||
+        API_KEY === "YOUR_NEWSAPI_KEY_HERE") {
+
+        throw new Error(
+            "請先在程式最上方輸入 NewsAPI API Key。"
+        );
+
+    }
+
+
+    /*
+     * 搜尋最近兩天。
+     *
+     * 注意：
+     * 免費 NewsAPI Developer 方案
+     * 有新聞時效限制。
+     */
+
+    const fromDate =
+        new Date(
+            Date.now() -
+            2 * 24 * 60 * 60 * 1000
+        );
+
+
+    const fromISO =
+        fromDate.toISOString();
+
+
+    const params =
+        new URLSearchParams({
+
+            q:
+                "world OR politics OR economy OR technology OR science",
+
+            language:
+                LANGUAGE,
+
+            sortBy:
+                "publishedAt",
+
+            pageSize:
+                FETCH_COUNT,
+
+            from:
+                fromISO,
+
+            apiKey:
+                API_KEY
+
+        });
+
+
+    const url =
+        NEWS_API +
+        "?" +
+        params.toString();
+
+
+    const response =
+        await fetch(url);
+
+
+    if (!response.ok) {
+
+        throw new Error(
+            "新聞 API 網絡請求失敗。"
+        );
+
+    }
+
+
+    const data =
+        await response.json();
+
+
+    if (data.status !== "ok") {
+
+        throw new Error(
+            data.message ||
+            "新聞 API 回傳錯誤。"
+        );
+
+    }
+
+
+    return data.articles || [];
+
+}
+
+
+/************************************************************
+ *                    10. 開始新聞
+ ************************************************************/
+
+async function startNews() {
+
+    /*
+     * 停止之前的朗讀
+     */
+    window.speechSynthesis.cancel();
+
+
+    newsArticles = [];
+
+    currentNewsIndex = 0;
+
+    isReading = false;
+
+    isPaused = false;
+
+
+    newsListElement.innerHTML = "";
+
+    currentNewsElement.textContent =
+        "正在搜尋今天的新聞……";
+
+
+    setStatus(
+        "正在互聯網搜尋新聞，請稍候……"
+    );
+
+
+    try {
+
+        const articles =
+            await fetchNews();
+
+
+        if (!articles ||
+            articles.length === 0) {
+
+            await speak(
+                "找不到任何新聞"
+            );
+
+            setStatus(
+                "找不到任何新聞"
+            );
+
+            return;
+
+        }
+
+
+        /*
+         * 去除重複新聞
+         */
+
+        newsArticles =
+            removeDuplicateNews(
+                articles
+            );
+
+
+        /*
+         * 如果不足 20 則，
+         * 就使用所有找到的新聞。
+         *
+         * 正式 V2 可以再設計多來源搜尋，
+         * 以提高取得 20 個不同事件的機會。
+         */
+
+        if (newsArticles.length === 0) {
+
+            await speak(
+                "找不到任何新聞"
+            );
+
+            setStatus(
+                "找不到任何新聞"
+            );
+
+            return;
+
+        }
+
+
+        /*
+         * 只顯示最多 50 則。
+         */
+        newsArticles =
+            newsArticles.slice(0, 50);
+
+
+        displayNewsList();
+
+
+        setStatus(
+            `找到 ${newsArticles.length} 則不同新聞，開始朗讀。`
+        );
+
+
+        /*
+         * 開始連續朗讀
+         */
+        await readAllNews();
+
+
+    } catch (error) {
+
+        console.error(error);
+
+
+        setStatus(
+            "新聞搜尋失敗：" +
+            error.message
+        );
+
+
+        await speak(
+            "找不到任何新聞"
+        );
+
+    }
+
+}
+
+
+/************************************************************
+ *                    11. 顯示新聞列表
+ ************************************************************/
+
+function displayNewsList() {
+
+    newsListElement.innerHTML = "";
+
+
+    newsArticles.forEach(
+        (article, index) => {
+
+            const div =
+                document.createElement("div");
+
+            div.className =
+                "news-item";
+
+
+            div.innerHTML = `
+
+                <div class="news-number">
+                    新聞 ${index + 1}
+                </div>
+
+                <div class="source">
+                    來源：
+                    ${escapeHTML(article.source)}
+                </div>
+
+                <div class="title">
+                    ${escapeHTML(article.title)}
+                </div>
+
+                <div class="description">
+                    ${escapeHTML(
+                        article.description ||
+                        "沒有新聞摘要。"
+                    )}
+                </div>
+
+                ${
+                    article.url
+                    ?
+                    `
+                    <div style="margin-top:8px;">
+                        <a
+                          href="${article.url}"
+                          target="_blank">
+                          查看原文
+                        </a>
+                    </div>
+                    `
+                    :
+                    ""
+                }
+
+            `;
+
+
+            newsListElement.appendChild(div);
+
+        }
+    );
+
+}
+
+
+/************************************************************
+ *                    12. 朗讀所有新聞
+ ************************************************************/
+
+async function readAllNews() {
+
+    isReading = true;
+
+    isPaused = false;
+
+
+    while (
+        currentNewsIndex <
+        newsArticles.length
+    ) {
+
+        /*
+         * 如果使用者停止新聞，
+         * 就離開播放迴圈。
+         */
+        if (!isReading) {
+            return;
+        }
+
+
+        const article =
+            newsArticles[
+                currentNewsIndex
+            ];
+
+
+        currentNewsElement.innerHTML = `
+
+            <strong>
+                正在朗讀：
+                新聞 ${currentNewsIndex + 1}
+                /
+                ${newsArticles.length}
+            </strong>
+
+            <br><br>
+
+            <strong>
+                來源：
+            </strong>
+            ${escapeHTML(article.source)}
+
+            <br><br>
+
+            ${escapeHTML(article.title)}
+
+        `;
+
+
+        setStatus(
+            `正在朗讀第 ${
+                currentNewsIndex + 1
+            } 則新聞，共 ${
+                newsArticles.length
+            } 則。`
+        );
+
+
+        /*
+         * 建立朗讀文字
+         */
+
+        let text =
+
+            `新聞 ${
+                currentNewsIndex + 1
+            }。`;
+
+        text +=
+
+            `來源：${article.source}。`;
+
+        text +=
+
+            `標題：${article.title}。`;
+
+
+        if (article.description) {
+
+            text +=
+
+                `新聞摘要：${article.description}。`;
+
+        }
+
+
+        /*
+         * 朗讀這一則。
+         *
+         * await 會等待這一則新聞
+         * 朗讀完成後才進入下一則。
+         */
+
+        await speak(text);
+
+
+        /*
+         * 如果中途停止，
+         * 不再進入下一則。
+         */
+
+        if (!isReading) {
+            return;
+        }
+
+
+        currentNewsIndex++;
+
+    }
+
+
+    /*
+     * 所有新聞完成
+     */
+
+    isReading = false;
+
+
+    currentNewsElement.textContent =
+        "所有新聞已經朗讀完成。";
+
+
+    setStatus(
+        "新聞朗讀完成"
+    );
+
+
+    await speak(
+        "新聞朗讀完成"
+    );
+
+}
+
+
+/************************************************************
+ *                    13. Speech Synthesis
+ ************************************************************/
+
+function speak(text) {
+
+    return new Promise(
+        (resolve) => {
+
+            /*
+             * 某些瀏覽器需要先取消
+             * 殘留的 speech queue。
+             */
+            window.speechSynthesis.cancel();
+
+
+            const utterance =
+                new SpeechSynthesisUtterance(
+                    text
+                );
+
+
+            /*
+             * 中文朗讀
+             */
+            utterance.lang =
+                "zh-HK";
+
+
+            /*
+             * 語速
+             *
+             * 0.85 比較適合新聞朗讀。
+             */
+            utterance.rate =
+                0.85;
+
+
+            /*
+             * 音調
+             */
+            utterance.pitch =
+                1.0;
+
+
+            utterance.onend =
+                () => {
+
+                    resolve();
+
+                };
+
+
+            utterance.onerror =
+                () => {
+
+                    resolve();
+
+                };
+
+
+            window.speechSynthesis.speak(
+                utterance
+            );
+
+        }
+    );
+
+}
+
+
+/************************************************************
+ *                    14. 暫停新聞
+ ************************************************************/
+
+function pauseNews() {
+
+    if (
+        window.speechSynthesis.speaking
+    ) {
+
+        window.speechSynthesis.pause();
+
+        isPaused = true;
+
+        setStatus(
+            "新聞朗讀已暫停"
+        );
+
+    }
+
+}
+
+
+/************************************************************
+ *                    15. 繼續新聞
+ ************************************************************/
+
+function resumeNews() {
+
+    if (
+        window.speechSynthesis.paused
+    ) {
+
+        window.speechSynthesis.resume();
+
+        isPaused = false;
+
+        setStatus(
+            "繼續朗讀新聞"
+        );
+
+    }
+
+}
+
+
+/************************************************************
+ *                    16. 停止新聞
+ ************************************************************/
+
+function stopNews() {
+
+    isReading = false;
+
+    isPaused = false;
+
+    window.speechSynthesis.cancel();
+
+    setStatus(
+        "新聞朗讀已停止"
+    );
+
+}
+
+
+/************************************************************
+ *                    17. 語音辨識
+ ************************************************************/
+
+function setupSpeechRecognition() {
+
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+
+    /*
+     * 瀏覽器不支援語音辨識
+     */
+
+    if (!SpeechRecognition) {
+
+        setStatus(
+            "此瀏覽器不支援語音辨識，請使用按鈕。"
+        );
+
+        return;
+
+    }
+
+
+    recognition =
+        new SpeechRecognition();
+
+
+    recognition.lang =
+        "zh-HK";
+
+
+    /*
+     * false：
+     * 每次取得一段結果。
+     */
+    recognition.continuous =
+        true;
+
+
+    recognition.interimResults =
+        false;
+
+
+    recognition.onstart =
+        function() {
+
+            recognitionRunning = true;
+
+            setStatus(
+                "正在聆聽指令……"
+            );
+
+        };
+
+
+    recognition.onresult =
+        function(event) {
+
+            const last =
+                event.results[
+                    event.results.length - 1
+                ];
+
+
+            if (!last.isFinal) {
+                return;
+            }
+
+
+            const command =
+                last[0].transcript
+                    .trim();
+
+
+            console.log(
+                "語音指令：",
+                command
+            );
+
+
+            handleVoiceCommand(
+                command
+            );
+
+        };
+
+
+    recognition.onerror =
+        function(event) {
+
+            console.log(
+                "語音辨識錯誤：",
+                event.error
+            );
+
+        };
+
+
+    recognition.onend =
+        function() {
+
+            recognitionRunning = false;
+
+
+            /*
+             * 只要頁面仍然開著，
+             * 就嘗試重新開始聆聽。
+             *
+             * 某些瀏覽器可能限制自動重新啟動。
+             */
+
+            setTimeout(
+                () => {
+
+                    try {
+
+                        recognition.start();
+
+                    } catch (e) {
+
+                        /*
+                         * 已經啟動時，
+                         * 不做任何事。
+                         */
+
+                    }
+
+                },
+                500
+            );
+
+        };
+
+
+    /*
+     * 開始聆聽
+     */
+
+    try {
+
+        recognition.start();
+
+    } catch (e) {
+
+        console.log(e);
+
+    }
+
+}
+
+
+/************************************************************
+ *                    18. 判斷語音指令
+ ************************************************************/
+
+function handleVoiceCommand(command) {
+
+    /*
+     * 去除空格
+     */
+    const text =
+        command.replace(/\s+/g, "");
+
+
+    /************************************************
+     * 今天新聞
+     ************************************************/
+
+    if (
+        text.includes("今天新聞") ||
+        text.includes("今日新聞") ||
+        text.includes("新聞")
+    ) {
+
+        startNews();
+
+        return;
+
+    }
+
+
+    /************************************************
+     * 暫停新聞
+     ************************************************/
+
+    if (
+        text.includes("暫停新聞") ||
+        text.includes("暫停")
+    ) {
+
+        pauseNews();
+
+        return;
+
+    }
+
+
+    /************************************************
+     * 繼續新聞
+     ************************************************/
+
+    if (
+        text.includes("繼續新聞") ||
+        text.includes("繼續")
+    ) {
+
+        resumeNews();
+
+        return;
+
+    }
+
+
+    /************************************************
+     * 停止新聞
+     ************************************************/
+
+    if (
+        text.includes("停止新聞") ||
+        text.includes("停止")
+    ) {
+
+        stopNews();
+
+        return;
+
+    }
+
+}
+
+
+/************************************************************
+ *                    19. 啟動
+ ************************************************************/
+
+window.addEventListener(
+    "load",
+    function() {
+
+        setStatus(
+            "等待語音指令：「今天新聞」"
+        );
+
+
+        setupSpeechRecognition();
+
+    }
+);
+
+</script>
+
+</body>
+</html>
